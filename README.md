@@ -1,6 +1,6 @@
-# RAGBot2 with Bright Data Integration
+# RAGBot2 with LinkUp Integration
 
-This project integrates AWS Strands with Bright Data API for web search capabilities.
+This project integrates AWS Strands with LinkUp API for web search capabilities.
 
 ## Setup
 
@@ -15,7 +15,7 @@ python setup.py
 This will:
 
 - Check and install dependencies
-- Prompt you for your Bright Data API key
+- Prompt you for your LinkUp API key
 - Create a `.env` file with your configuration
 
 ### Manual Setup
@@ -26,14 +26,14 @@ This will:
 pip install -r requirements.txt
 ```
 
-#### 2. Configure Bright Data API Credentials
+#### 2. Configure LinkUp API Credentials
 
 **Option A: Create a .env file (Recommended)**
 Create a `.env` file in your project root:
 
 ```bash
-# Bright Data API Configuration
-BRIGHT_DATA_API_KEY=your_actual_bright_data_api_key
+# LinkUp API Configuration
+LINKUP_API_KEY=your_actual_linkup_api_key
 
 # AWS Configuration (optional)
 AWS_PROFILE=bach-dev
@@ -45,19 +45,19 @@ AWS_REGION=us-east-1
 Linux/macOS:
 
 ```bash
-export BRIGHT_DATA_API_KEY=your_bright_data_api_key
+export LINKUP_API_KEY=your_linkup_api_key
 ```
 
 Windows (PowerShell):
 
 ```powershell
-$env:BRIGHT_DATA_API_KEY="your_bright_data_api_key"
+$env:LINKUP_API_KEY="your_linkup_api_key"
 ```
 
 Windows (Command Prompt):
 
 ```cmd
-set BRIGHT_DATA_API_KEY=your_bright_data_api_key
+set LINKUP_API_KEY=your_linkup_api_key
 ```
 
 #### 3. Configure AWS Credentials
@@ -74,15 +74,12 @@ python agent.py
 
 ### Available Tools
 
-1. **bright_data_web_search**: Perform general web searches
+1. **web_search**: Perform web searches using LinkUp's Web Search API
 
-   - Parameters: query, country, language, num_results, include_domains, exclude_domains
+   - Parameters: query (search query to perform)
+   - Returns: Sourced answers with references from LinkUp API
 
-2. **bright_data_news_search**: Search for news articles
-
-   - Parameters: query, country, language, num_results, time_period
-
-3. **http_request**: Make HTTP requests (from strands-agents-tools)
+2. **AWS Documentation**: Lookup AWS documentation (from aws-documentation-mcp-server)
 
 ### Example Usage
 
@@ -91,14 +88,14 @@ Once the agent is running, you can ask questions like:
 - "Search for the latest news about artificial intelligence"
 - "Find information about Python programming tutorials"
 - "Search for recent developments in renewable energy"
+- "What is the current price of bitcoin?"
 
-## Bright Data API Features
+## LinkUp API Features
 
-- **Web Search**: Access to Google search results
-- **News Search**: Access to news articles from various sources
-- **Geo-targeting**: Search results from specific countries
-- **Language filtering**: Results in specific languages
-- **Domain filtering**: Include or exclude specific domains
+- **Web Search**: Access to comprehensive web search results
+- **Sourced Answers**: Results include source references for verification
+- **Standard Depth**: Provides thorough search coverage
+- **Structured Output**: Results formatted for easy consumption by the AI agent
 
 ## Error Handling
 
@@ -111,6 +108,6 @@ The tools include comprehensive error handling for:
 
 ## Notes
 
-- The Bright Data API requires a paid subscription
+- The LinkUp API requires a paid subscription
 - API calls are rate-limited based on your subscription plan
 - Results are formatted for easy consumption by the AI agent
