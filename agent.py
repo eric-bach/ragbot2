@@ -5,15 +5,15 @@ import subprocess
 from dotenv import load_dotenv
 from strands import Agent
 from strands.models import BedrockModel
+from strands_tools import http_request, retrieve
 from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
 from tools.web_search import web_search
 
-# Load environment variables from .env file
 load_dotenv()
-
 AWS_PROFILE = os.getenv('AWS_PROFILE', 'bach-dev')
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
+KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID')
 
 session = boto3.Session(
     profile_name=AWS_PROFILE,
@@ -66,19 +66,22 @@ aws_documentation_mcp_client = MCPClient(
 def interactive_session():
     with aws_documentation_mcp_client:
         tools = aws_documentation_mcp_client.list_tools_sync()
-        tools += [web_search]
+        tools += [web_search, http_request, retrieve]
 
         while True:
             agent = Agent(
                 system_prompt="""
-                You are a chatbot that can answer questions and help with tasks.
-                
-                You have access to do
+                You are a chatbot with RAG capabilities that can answer questions and help with tasks. 
+                When a user asks you a question you will first check it in your knowledge base. You will evaluate if the returned chunks are relevant using a relevance score tool. If they are not relevant to the question you will use your web search tool to gather additional data to answer the question. You are an agent in charge of looking for information in your knoweldege base and if the results are not relevant using ragas, use a web search. When you use the retrieve tool, do not modify or break down the users question, pass as is.
+
+                You have access to:
                     - Web search capabilities through LinkUp API
                     - Lookup AWS documentation
+                    - Retrieve information from Bedrock knowledge bases
 
-                Use the tools web_search tool for web searches
+                Use the web_search tool for web searches
                 Use the aws-documentation-mcp-server to get information on AWS documentation
+                Use the retrieve tool to search Bedrock knowledge bases
                 """,
                 tools=tools,
                 model=bedrock_model
@@ -92,7 +95,7 @@ def interactive_session():
                 break
 
             # Send the input to the agent
-            agent(user_input)
+            agent(user_input, )
 
 if __name__ == "__main__":
     interactive_session()
