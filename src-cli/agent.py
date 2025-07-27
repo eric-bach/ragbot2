@@ -11,14 +11,11 @@ from mcp import stdio_client, StdioServerParameters
 from tools.web_search import web_search
 
 load_dotenv()
-AWS_PROFILE = os.getenv('AWS_PROFILE', 'bach-dev')
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID')
 
-session = boto3.Session(
-    profile_name=AWS_PROFILE,
-    region_name=AWS_REGION
-)
+# Create session without profile for ECS deployment
+session = boto3.Session(region_name=AWS_REGION)
 
 # Create a Bedrock model with the custom session
 bedrock_model = BedrockModel(
@@ -54,9 +51,7 @@ aws_documentation_mcp_client = MCPClient(
             "run",
             "--rm",
             "--interactive",
-            "--env", f"AWS_PROFILE={AWS_PROFILE}",
             "--env", f"AWS_REGION={AWS_REGION}",
-            "-v", "/c/Users/eric/.aws:/app/.aws",
             "--env", "FASTMCP_LOG_LEVEL=ERROR",
             "awslabs/aws-documentation-mcp-server:latest"
         ]

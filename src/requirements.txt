@@ -1,0 +1,8 @@
+boto3
+strands-agents
+strands-agents-tools
+requests
+python-dotenv
+linkup-sdk
+fastapi[standard]
+uvicorn
