@@ -1,9 +1,11 @@
 import os
 import boto3
 from dotenv import load_dotenv
-from strands import Agent, tool
+from strands import Agent
 from strands_tools import http_request, retrieve
 from strands.models import BedrockModel
+from strands.tools.mcp import MCPClient
+from mcp import stdio_client, StdioServerParameters
 from tools.web_search import web_search
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
@@ -28,6 +30,13 @@ bedrock_model = BedrockModel(
     boto_session=session
 )
 
+aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
+    StdioServerParameters(
+        command="uvx", 
+        args=["awslabs.aws-documentation-mcp-server@latest"]
+    )
+))
+
 @app.get("/")
 def home():
     return {"RAGBot": "v2"}
@@ -45,30 +54,34 @@ def debug_env():
     }
 
 async def chat_stream_response(query: str):
-    agent = Agent(
-        system_prompt="""
-        You are a chatbot with RAG capabilities that can answer questions and help with tasks. 
-        
-        When a user asks you a question, you will first check it in your knowledge base. 
-        You will evaluate if the returned chunks are relevant using a relevance score tool.
+    with aws_documentation_mcp_client:
+        tools = aws_documentation_mcp_client.list_tools_sync()
+        tools += [web_search, http_request, retrieve]
 
-        You have access to:
-            - Web search capabilities through LinkUp API
-            - Lookup AWS documentation
-            - Retrieve information from Bedrock knowledge bases
+        agent = Agent(
+            system_prompt="""
+            You are a chatbot with RAG capabilities that can answer questions and help with tasks. 
+            
+            When a user asks you a question, you will first check it in your knowledge base. 
+            You will evaluate if the returned chunks are relevant using a relevance score tool.
 
-        Use the retrieve tool to search Bedrock knowledge bases about information on Cars
-        Use the aws-documentation-mcp-server to get information on AWS documentation
-        Use the web_search tool for web searches
-        """,
-        tools=[web_search, http_request, retrieve],
-        model=bedrock_model,
-        callback_handler=None
-    )
+            You have access to:
+                - Web search capabilities through LinkUp API
+                - Lookup AWS documentation
+                - Retrieve information from Bedrock knowledge bases
 
-    async for item in agent.stream_async(query):
-        if "data" in item:
-            yield item['data']
+            Use the retrieve tool to search Bedrock knowledge bases about information on Cars
+            Use the aws-documentation-mcp-server to get information on AWS documentation
+            Use the web_search tool for web searches
+            """,
+            tools=tools,
+            model=bedrock_model,
+            callback_handler=None
+        )
+
+        async for item in agent.stream_async(query):
+            if "data" in item:
+                yield item['data']
 
 @app.post('/chat')
 def chat(request: ChatRequest):

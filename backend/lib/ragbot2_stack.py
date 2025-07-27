@@ -7,8 +7,6 @@ from aws_cdk import (
     aws_logs as logs,
     aws_iam as iam,
     aws_ecr_assets as ecr_assets,
-    aws_elasticloadbalancingv2 as elbv2,
-    CfnOutput,
     Duration,
     RemovalPolicy,
 )
@@ -32,8 +30,11 @@ class Ragbot2Stack(Stack):
         bucket = s3.Bucket(
             self,
             "ragbot-source-bucket",
-            bucket_name="ragbot-source-bucket"
+            bucket_name="ragbot-source-bucket",
+            removal_policy=RemovalPolicy.DESTROY
         )
+
+        # TODO Add Knowledge Bases with Vector S3
 
         # Create a VPC for our Fargate service
         vpc = ec2.Vpc(
@@ -67,7 +68,7 @@ class Ragbot2Stack(Stack):
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")
             ],
         )
-
+        
         # Create a task role with permissions to invoke Bedrock APIs
         task_role = iam.Role(
             self, 
@@ -88,7 +89,7 @@ class Ragbot2Stack(Stack):
                 resources=["*"],
             )
         )
-        
+
         # Create a task definition
         task_definition = ecs.FargateTaskDefinition(
             self, 
@@ -165,12 +166,4 @@ class Ragbot2Stack(Stack):
             min_healthy_percent=0,
             max_healthy_percent=100,  # Allow up to 100% but minimum 0% for deployments
             health_check_grace_period=Duration.seconds(120),
-        )
- 
-        # Output the service endpoint (you'll get the public IP from ECS console)
-        CfnOutput(
-            self,
-            "AgentServiceEndpoint",
-            value="Check ECS console for the public IP of the running task",
-            description="The public IP of the Agent Service (check ECS console)",
         )

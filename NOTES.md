@@ -1,30 +1,55 @@
 ##### Tasks
 
 - [x] Deploy Strands Agent in AWS (ECS Fargate)
-- [] Deploy aws-documentation-mcp-server in AWS (ECS Fargate)
+- [x] Deploy aws-documentation-mcp-server in AWS
+- [x] Add aws-documentation-mcp-server back to fast_agent.py and test it works in AWS
 - [] Create API GW with Cognito User Pool to front Strands Agent, remove public Fargate IP
 - [] Build frontend UI to connect to backend
+- [] Lock down containers to private network
 
 ##### Running FAST API Docker container locally
 
-docker build -t fast-agent .
+RUN LOCALLY
 
-docker run --rm --interactive --env AWS_PROFILE=bach-dev --env AWS_REGION=us-east-1 -v //c/Users/eric/.aws:/root/.aws -p 8000:8000 fast-agent
+```
+   cd src
 
-curl -X GET http://localhost:8000
-curl -X POST http://localhost/chat:8000 -H 'Content-Type: application/json' -d '{"query": "What is the recommended PSI for the tires?"}'
+   docker build -t fast-agent .
 
-##### Deploying to AWS
-
-cd backend
-python -m venv .venv
-pip install -r requirements.txt
-cdk deploy --profile bach-dev
+   docker run --rm --interactive --env AWS_PROFILE=bach-dev --env AWS_REGION=us-east-1 -v //c/Users/eric/.aws:/root/.aws -p 8000:8000 fast-agent
+```
 
 TESTS
 
-curl -X GET http://<PUBLIC IP>:8000
-curl -X POST http://<PUBLIC IP>:8000 -H 'Content-Type: application/json' -d '{"query": "What is the recommended PSI for the tires?"}'
+```
+   curl -X GET http://localhost:8000/debug
+   curl -X POST http://localhost/chat:8000 -H 'Content-Type: application/json' -d '{"query": "What is the recommended tire pressure of a 07 Camry?"}'
+   curl -X POST http://localhost/chat:8000 -H 'Content-Type: application/json' -d '{"query": "What is AWS Lambda?"}'
+   curl -X POST http://localhost/chat:8000 -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Seattle?"}'
+```
+
+##### Deploying to AWS
+
+DEPLOY
+
+```
+   cd backend
+
+   python -m venv .venv
+
+   pip install -r requirements.txt
+
+   cdk deploy --profile bach-dev
+```
+
+TESTS
+
+```
+   curl -X GET http://<PUBLIC IP>:8000/debug
+   curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
+   curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
+   curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
+```
 
 ##### Questions
 

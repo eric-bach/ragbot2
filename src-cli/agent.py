@@ -1,7 +1,5 @@
 import boto3
 import os
-import atexit
-import subprocess
 from dotenv import load_dotenv
 from strands import Agent
 from strands.models import BedrockModel
@@ -24,39 +22,25 @@ bedrock_model = BedrockModel(
     boto_session=session
 )
 
-def cleanup_orphaned_containers():
-    """Clean up any orphaned AWS documentation MCP containers"""
-    try:
-        # Find and stop any running containers with our image
-        result = subprocess.run(
-            ["docker", "ps", "--filter", "ancestor=awslabs/aws-documentation-mcp-server:latest", "--format", "{{.ID}}"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.stdout.strip():
-            container_ids = result.stdout.strip().split('\n')
-            for container_id in container_ids:
-                if container_id:
-                    subprocess.run(["docker", "stop", container_id], 
-                                 capture_output=True, timeout=5)
-    except:
-        pass
+# # For macOS/Linux:
+# aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
+#     StdioServerParameters(
+#         command="uvx", 
+#         args=["awslabs.aws-documentation-mcp-server@latest"]
+#     )
+# ))
 
-# Register cleanup function to run on exit
-atexit.register(cleanup_orphaned_containers)
-
-aws_documentation_mcp_client = MCPClient(
-    lambda: stdio_client(StdioServerParameters(
-        command="docker",
+# For Windows:
+aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
+    StdioServerParameters(
+        command="uvx", 
         args=[
-            "run",
-            "--rm",
-            "--interactive",
-            "--env", f"AWS_REGION={AWS_REGION}",
-            "--env", "FASTMCP_LOG_LEVEL=ERROR",
-            "awslabs/aws-documentation-mcp-server:latest"
+            "--from", 
+            "awslabs.aws-documentation-mcp-server@latest", 
+            "awslabs.aws-documentation-mcp-server.exe"
         ]
-    ))
-)
+    )
+))
 
 def interactive_session():
     with aws_documentation_mcp_client:
