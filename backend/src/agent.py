@@ -72,23 +72,25 @@ def interactive_session():
             agent = Agent(
                 system_prompt="""
                 You are a chatbot with RAG capabilities that can answer questions and help with tasks. 
-                When a user asks you a question you will first check it in your knowledge base. You will evaluate if the returned chunks are relevant using a relevance score tool. If they are not relevant to the question you will use your web search tool to gather additional data to answer the question. You are an agent in charge of looking for information in your knoweldege base and if the results are not relevant using ragas, use a web search. When you use the retrieve tool, do not modify or break down the users question, pass as is.
+                
+                When a user asks you a question, you will first check it in your knowledge base. 
+                You will evaluate if the returned chunks are relevant using a relevance score tool.
 
                 You have access to:
                     - Web search capabilities through LinkUp API
                     - Lookup AWS documentation
                     - Retrieve information from Bedrock knowledge bases
 
-                Use the web_search tool for web searches
+                Use the retrieve tool to search Bedrock knowledge bases about information on Cars
                 Use the aws-documentation-mcp-server to get information on AWS documentation
-                Use the retrieve tool to search Bedrock knowledge bases
+                Use the web_search tool for web searches
                 """,
                 tools=tools,
                 model=bedrock_model
             )
 
             # Get user input
-            user_input = input("\nHow can I help you?\n")
+            user_input = input("\n\n🤖 How can I help you?\n")
 
             if user_input.lower() in ["exit", "quit", "bye"]:
                 print("Goodbye!")
