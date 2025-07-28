@@ -8,6 +8,7 @@ from aws_cdk import (
     aws_iam as iam,
     aws_ecr_assets as ecr_assets,
     aws_elasticloadbalancingv2 as elbv2,
+    aws_apigateway as apigateway,
     Duration,
     RemovalPolicy,
 )
@@ -212,4 +213,59 @@ class Ragbot2Stack(Stack):
                 'healthy_http_codes': '200'
             },
             deregistration_delay=Duration.seconds(30),
+        )
+
+        # Create API Gateway that proxies to ALB
+        api = apigateway.RestApi(
+            self,
+            "AgentApi",
+            rest_api_name="ragbot-agent-api",
+            description="API Gateway for RAGBot Agent Service",
+            default_cors_preflight_options=apigateway.CorsOptions(
+                allow_origins=apigateway.Cors.ALL_ORIGINS,
+                allow_methods=apigateway.Cors.ALL_METHODS,
+                allow_headers=["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key"]
+            ),
+        )
+
+        # Integration for root path
+        root_integration = apigateway.Integration(
+            type=apigateway.IntegrationType.HTTP_PROXY,
+            integration_http_method="ANY",
+            uri=f"http://{alb.load_balancer_dns_name}",
+            options=apigateway.IntegrationOptions(
+                connection_type=apigateway.ConnectionType.INTERNET,
+            ),
+        )
+
+        # Integration for proxy paths (removes stage name)
+        proxy_integration = apigateway.Integration(
+            type=apigateway.IntegrationType.HTTP_PROXY,
+            integration_http_method="ANY",
+            uri=f"http://{alb.load_balancer_dns_name}/{{proxy}}",
+            options=apigateway.IntegrationOptions(
+                connection_type=apigateway.ConnectionType.INTERNET,
+                request_parameters={
+                    "integration.request.path.proxy": "method.request.path.proxy"
+                }
+            ),
+        )
+
+        # Add ANY method to root (handles /prod -> ALB/)
+        api.root.add_method(
+            "ANY", 
+            root_integration,
+            request_parameters={
+                "method.request.path.proxy": False
+            }
+        )
+
+        # Add catch-all greedy proxy route for any sub-paths (handles /prod/debug -> ALB/debug)
+        catch_all = api.root.add_resource("{proxy+}")
+        catch_all.add_method(
+            "ANY", 
+            proxy_integration,
+            request_parameters={
+                "method.request.path.proxy": True
+            }
         )

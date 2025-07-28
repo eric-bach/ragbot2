@@ -3,7 +3,10 @@
 - [x] Deploy Strands Agent in AWS (ECS Fargate)
 - [x] Deploy aws-documentation-mcp-server in AWS
 - [x] Add aws-documentation-mcp-server back to fast_agent.py and test it works in AWS
-- [] Create API GW with Cognito Authorizer to call ECS Public IP, update ECS SG to only allow API GW egress IPs
+- [x] Add ALB to AWS ECS Farate container
+- [] Create API GW to call ALB
+- [] Create Cognito User Pool and add to API GW
+- [] Create Bedrock Knowledge Base with S3 Vectors
 - [] Build frontend UI to connect to backend
 - [] Lock down containers to private network
 
@@ -19,7 +22,6 @@ RUN LOCALLY
    docker run --rm --interactive --env AWS_PROFILE=bach-dev --env AWS_REGION=us-east-1 -v //c/Users/eric/.aws:/root/.aws -p 8000:8000 fast-agent
 ```
 
-,
 TESTS
 
 ```
@@ -55,6 +57,11 @@ TESTS
    curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
    curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
    curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
+
+   curl -X GET http://<API GW URL>/debug
+   curl -X POST http://<API GW URL>/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
+   curl -X POST http://<API GW URL>/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
+   curl -X POST http://<API GW URL>/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
 ```
 
 ##### Questions
