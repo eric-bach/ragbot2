@@ -1,7 +1,5 @@
 {
   "acknowledged-issue-numbers": [34892],
-  "cli-telemetry": false,
-  "notices": false,
   "availability-zones:account=115499684434:region=us-east-1": [
     "us-east-1a",
     "us-east-1b",

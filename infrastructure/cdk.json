@@ -1,6 +1,8 @@
 {
-  "app": "python bin/app.py",
+  "app": "python app.py",
   "requireApproval": "never",
+  "cli-telemetry": false,
+  "notices": false,
   "watch": {
     "include": ["**"],
     "exclude": [
