@@ -195,12 +195,88 @@ class Ragbot2Stack(Stack):
             load_balancer_name="agent-alb",
         )
 
+        # Optional: Add Cognito User Pool for ALB authentication
+        # Uncomment this section if you want managed authentication
+        #
+        # from aws_cdk import aws_cognito as cognito
+        # 
+        # user_pool = cognito.UserPool(
+        #     self,
+        #     "AgentUserPool",
+        #     user_pool_name="ragbot-users",
+        #     sign_in_aliases=cognito.SignInAliases(email=True),
+        #     auto_verify=cognito.AutoVerifiedAttrs(email=True),
+        #     password_policy=cognito.PasswordPolicy(
+        #         min_length=8,
+        #         require_lowercase=True,
+        #         require_uppercase=True,
+        #         require_digits=True,
+        #     ),
+        # )
+        # 
+        # user_pool_client = cognito.UserPoolClient(
+        #     self,
+        #     "AgentUserPoolClient",
+        #     user_pool=user_pool,
+        #     generate_secret=True,  # Required for ALB integration
+        #     o_auth=cognito.OAuthSettings(
+        #         flows=cognito.OAuthFlows(authorization_code_grant=True),
+        #         scopes=[cognito.OAuthScope.OPENID, cognito.OAuthScope.EMAIL],
+        #         callback_urls=[f"https://{alb.load_balancer_dns_name}/oauth2/idpresponse"],
+        #     ),
+        # )
+        # 
+        # user_pool_domain = cognito.UserPoolDomain(
+        #     self,
+        #     "AgentUserPoolDomain",
+        #     user_pool=user_pool,
+        #     cognito_domain=cognito.CognitoDomainOptions(
+        #         domain_prefix="ragbot-auth"  # Must be globally unique
+        #     ),
+        # )
+
         # Create a listener
         listener = alb.add_listener(
             "AgentListener",
             port=80,
         )
 
+        # AUTHENTICATION OPTIONS - Choose one approach:
+
+        # Option 1: Cognito Authentication (uncomment the Cognito section above first)
+        # listener.add_action(
+        #     "AuthAction",
+        #     priority=100,
+        #     conditions=[
+        #         elbv2.ListenerCondition.path_patterns(["*"])
+        #     ],
+        #     action=elbv2.ListenerAction.authenticate_cognito(
+        #         user_pool=user_pool,
+        #         user_pool_client=user_pool_client,
+        #         user_pool_domain=user_pool_domain,
+        #         next_action=elbv2.ListenerAction.forward([target_group])
+        #     ),
+        # )
+
+        # Option 2: OIDC Authentication (e.g., with Auth0, Google, etc.)
+        # listener.add_action(
+        #     "OIDCAuthAction", 
+        #     priority=100,
+        #     conditions=[
+        #         elbv2.ListenerCondition.path_patterns(["*"])
+        #     ],
+        #     action=elbv2.ListenerAction.authenticate_oidc(
+        #         authorization_endpoint="https://your-provider.auth0.com/authorize",
+        #         client_id="your-client-id",
+        #         client_secret="your-client-secret", 
+        #         issuer="https://your-provider.auth0.com/",
+        #         token_endpoint="https://your-provider.auth0.com/oauth/token",
+        #         user_info_endpoint="https://your-provider.auth0.com/userinfo",
+        #         next_action=elbv2.ListenerAction.forward([target_group])
+        #     ),
+        # )
+
+        # Option 3: No ALB-level auth - handle in application (current setup)
         # Create a target group
         target_group = listener.add_targets(
             'AgentTargets',
@@ -215,57 +291,57 @@ class Ragbot2Stack(Stack):
             deregistration_delay=Duration.seconds(30),
         )
 
-        # Create API Gateway that proxies to ALB
-        api = apigateway.RestApi(
-            self,
-            "AgentApi",
-            rest_api_name="ragbot-agent-api",
-            description="API Gateway for RAGBot Agent Service",
-            default_cors_preflight_options=apigateway.CorsOptions(
-                allow_origins=apigateway.Cors.ALL_ORIGINS,
-                allow_methods=apigateway.Cors.ALL_METHODS,
-                allow_headers=["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key"]
-            ),
-        )
+        # # Create API Gateway that proxies to ALB
+        # api = apigateway.RestApi(
+        #     self,
+        #     "AgentApi",
+        #     rest_api_name="ragbot-agent-api",
+        #     description="API Gateway for RAGBot Agent Service",
+        #     default_cors_preflight_options=apigateway.CorsOptions(
+        #         allow_origins=apigateway.Cors.ALL_ORIGINS,
+        #         allow_methods=apigateway.Cors.ALL_METHODS,
+        #         allow_headers=["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key"]
+        #     ),
+        # )
 
-        # Integration for root path
-        root_integration = apigateway.Integration(
-            type=apigateway.IntegrationType.HTTP_PROXY,
-            integration_http_method="ANY",
-            uri=f"http://{alb.load_balancer_dns_name}",
-            options=apigateway.IntegrationOptions(
-                connection_type=apigateway.ConnectionType.INTERNET,
-            ),
-        )
+        # # Integration for root path
+        # root_integration = apigateway.Integration(
+        #     type=apigateway.IntegrationType.HTTP_PROXY,
+        #     integration_http_method="ANY",
+        #     uri=f"http://{alb.load_balancer_dns_name}",
+        #     options=apigateway.IntegrationOptions(
+        #         connection_type=apigateway.ConnectionType.INTERNET,
+        #     ),
+        # )
 
-        # Integration for proxy paths (removes stage name)
-        proxy_integration = apigateway.Integration(
-            type=apigateway.IntegrationType.HTTP_PROXY,
-            integration_http_method="ANY",
-            uri=f"http://{alb.load_balancer_dns_name}/{{proxy}}",
-            options=apigateway.IntegrationOptions(
-                connection_type=apigateway.ConnectionType.INTERNET,
-                request_parameters={
-                    "integration.request.path.proxy": "method.request.path.proxy"
-                }
-            ),
-        )
+        # # Integration for proxy paths (removes stage name)
+        # proxy_integration = apigateway.Integration(
+        #     type=apigateway.IntegrationType.HTTP_PROXY,
+        #     integration_http_method="ANY",
+        #     uri=f"http://{alb.load_balancer_dns_name}/{{proxy}}",
+        #     options=apigateway.IntegrationOptions(
+        #         connection_type=apigateway.ConnectionType.INTERNET,
+        #         request_parameters={
+        #             "integration.request.path.proxy": "method.request.path.proxy"
+        #         }
+        #     ),
+        # )
 
-        # Add ANY method to root (handles /prod -> ALB/)
-        api.root.add_method(
-            "ANY", 
-            root_integration,
-            request_parameters={
-                "method.request.path.proxy": False
-            }
-        )
+        # # Add ANY method to root (handles /prod -> ALB/)
+        # api.root.add_method(
+        #     "ANY", 
+        #     root_integration,
+        #     request_parameters={
+        #         "method.request.path.proxy": False
+        #     }
+        # )
 
-        # Add catch-all greedy proxy route for any sub-paths (handles /prod/debug -> ALB/debug)
-        catch_all = api.root.add_resource("{proxy+}")
-        catch_all.add_method(
-            "ANY", 
-            proxy_integration,
-            request_parameters={
-                "method.request.path.proxy": True
-            }
-        )
+        # # Add catch-all greedy proxy route for any sub-paths (handles /prod/debug -> ALB/debug)
+        # catch_all = api.root.add_resource("{proxy+}")
+        # catch_all.add_method(
+        #     "ANY", 
+        #     proxy_integration,
+        #     request_parameters={
+        #         "method.request.path.proxy": True
+        #     }
+        # )

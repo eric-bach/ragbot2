@@ -3,11 +3,11 @@
 - [x] Deploy Strands Agent in AWS (ECS Fargate)
 - [x] Deploy aws-documentation-mcp-server in AWS
 - [x] Add aws-documentation-mcp-server back to fast_agent.py and test it works in AWS
-- [x] Add ALB to AWS ECS Farate container
-- [] Create API GW to call ALB
-- [] Create Cognito User Pool and add to API GW
+- [x] Add ALB to AWS ECS Fargate container
+- [] Create Cognito User Pool
+- [] Add Cognito authentication to ALB
 - [] Create Bedrock Knowledge Base with S3 Vectors
-- [] Build frontend UI to connect to backend
+- [] Build frontend UI to connect to ALB backend
 - [] Lock down containers to private network
 
 ##### Running FAST API Docker container locally
