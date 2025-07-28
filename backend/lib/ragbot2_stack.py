@@ -7,6 +7,7 @@ from aws_cdk import (
     aws_logs as logs,
     aws_iam as iam,
     aws_ecr_assets as ecr_assets,
+    aws_elasticloadbalancingv2 as elbv2,
     Duration,
     RemovalPolicy,
 )
@@ -40,8 +41,9 @@ class Ragbot2Stack(Stack):
         vpc = ec2.Vpc(
             self, 
             "AgentVpc",
-            max_azs=1,  # Use 1 Availability Zone to reduce costs
+            max_azs=2,
             nat_gateways=0,  # No NAT Gateway to save costs
+            #cidr="172.16.0.0/16",  # Use a different CIDR block to avoid conflicts
         )
 
         # Create an ECS cluster
@@ -136,22 +138,36 @@ class Ragbot2Stack(Stack):
             ],
         )
  
+        # ALB security group
+        alb_sg = ec2.SecurityGroup(
+            self, "ALBSG",
+            vpc=vpc,
+            description="Allow HTTP in",
+            allow_all_outbound=True,
+        )
+        alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(80), "Allow HTTP in")
+
         # Create security group
         security_group = ec2.SecurityGroup(
             self, 
             "AgentServiceSG",
             vpc=vpc,
-            description="Security group for Agent Fargate Service",
+            description="Only allow traffic from ALB",
             allow_all_outbound=True,
         )
-        
+      
         # Add ingress rule for port 8000
+        # security_group.add_ingress_rule(
+        #     peer=ec2.Peer.any_ipv4(),
+        #     connection=ec2.Port.tcp(8000),
+        #     description="Allow inbound traffic on port 8000"
+        # )
         security_group.add_ingress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(8000),
-            description="Allow inbound traffic on port 8000"
+            alb_sg,
+            ec2.Port.tcp(8000),
+            "Allow ALB to reach ECS task"
         )
-
+  
         # Create a Fargate service
         service = ecs.FargateService(
             self, 
@@ -166,4 +182,34 @@ class Ragbot2Stack(Stack):
             min_healthy_percent=0,
             max_healthy_percent=100,  # Allow up to 100% but minimum 0% for deployments
             health_check_grace_period=Duration.seconds(120),
+        )
+
+        # Create a load balancer
+        alb = elbv2.ApplicationLoadBalancer(
+            self,
+            "AgentALB",
+            vpc=vpc,
+            internet_facing=True,
+            security_group=alb_sg,
+            load_balancer_name="agent-alb",
+        )
+
+        # Create a listener
+        listener = alb.add_listener(
+            "AgentListener",
+            port=80,
+        )
+
+        # Create a target group
+        target_group = listener.add_targets(
+            'AgentTargets',
+            port=8000,
+            targets=[service],
+            health_check={
+                'path': '/health',
+                'interval': Duration.seconds(30),
+                'timeout': Duration.seconds(5),
+                'healthy_http_codes': '200'
+            },
+            deregistration_delay=Duration.seconds(30),
         )

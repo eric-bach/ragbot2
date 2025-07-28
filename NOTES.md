@@ -50,6 +50,11 @@ TESTS
    curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
    curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
    curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
+
+   curl -X GET http://<ALB>/debug
+   curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
+   curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
+   curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
 ```
 
 ##### Questions
