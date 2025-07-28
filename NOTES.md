@@ -4,11 +4,12 @@
 - [x] Deploy aws-documentation-mcp-server in AWS
 - [x] Add aws-documentation-mcp-server back to fast_agent.py and test it works in AWS
 - [x] Add ALB to AWS ECS Fargate container
-- [] Create Cognito User Pool
-- [] Add Cognito authentication to ALB
-- [] Create Bedrock Knowledge Base with S3 Vectors
-- [] Build frontend UI to connect to ALB backend
-- [] Lock down containers to private network
+- [x] Create Cognito User Pool
+- [-] Create Bedrock Knowledge Base with S3 Vectors - NOT SUPPORTED YET
+- [x] Add Cognito authentication to ALB - REQUIRES CERTIFICATE
+- [] Build frontend to connect to R53/ALB/ECS to test how streaming works with ECS
+- [] Move from ECS Fargate to Lambda Function URLs with auth in Lambda code
+- [] Switch frontend to connect to Lambda fURL to compare how streaming works with fURL
 
 ##### Running FAST API Docker container locally
 
@@ -26,9 +27,9 @@ TESTS
 
 ```
    curl -X GET http://localhost:8000/debug
-   curl -X POST http://localhost/chat:8000 -H 'Content-Type: application/json' -d '{"query": "What is the recommended tire pressure of a 07 Camry?"}'
-   curl -X POST http://localhost/chat:8000 -H 'Content-Type: application/json' -d '{"query": "What is AWS Lambda?"}'
-   curl -X POST http://localhost/chat:8000 -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Seattle?"}'
+   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the recommended tire pressure of a 07 Camry?"}'
+   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is AWS Lambda?"}'
+   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Seattle?"}'
 ```
 
 ##### Deploying to AWS
