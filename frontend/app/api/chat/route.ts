@@ -10,7 +10,10 @@ export async function POST(request: NextRequest) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    const response = await fetch('http://localhost:8000/chat', {
+    //const response = await fetch('http://localhost:8000/chat', { // Local Docker - WORKING
+    //const response = await fetch('http://54.162.125.152:8000/chat', { // ECS Container - WORKING
+    const response = await fetch('https://ragbot2.ericbach.dev/chat', {
+      // AWS ALB - WORKING
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

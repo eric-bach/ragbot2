@@ -76,7 +76,7 @@ def interactive_session():
                 break
 
             # Send the input to the agent
-            agent(user_input, )
+            agent(user_input)
 
 if __name__ == "__main__":
     interactive_session()
