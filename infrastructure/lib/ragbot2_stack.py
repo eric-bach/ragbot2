@@ -269,7 +269,13 @@ class Ragbot2Stack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
         )
         
-        user_pool_client = cognito.UserPoolClient(
+        react_user_pool_client = cognito.UserPoolClient(
+            self,
+            "ReactAgentUserPoolClient",
+            user_pool=user_pool
+        )
+
+        alb_user_pool_client = cognito.UserPoolClient(
             self,
             "AgentUserPoolClient",
             user_pool=user_pool,
