@@ -26,5 +26,3 @@ applications:
               value: 'no-cache'
             - key: 'Connection'
               value: 'keep-alive'
-            - key: 'Transfer-Encoding'
-              value: 'chunked'
