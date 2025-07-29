@@ -36,6 +36,7 @@ function ChatLayout({ children, signOut, user }: ChatLayoutProps) {
       <nav className='flex-shrink-0 bg-card border-b border-border px-4 py-3'>
         <div className='max-w-4xl mx-auto flex items-center justify-between'>
           <div className='flex items-center space-x-3'>
+            <img src='/logo.png' alt='RAGBot Logo' className='w-8 h-8' />
             <h1 className='text-xl font-semibold'>RAGBot 2</h1>
           </div>
           <div className='flex items-center space-x-4'>
