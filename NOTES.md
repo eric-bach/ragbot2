@@ -13,7 +13,7 @@
 
 ##### Running FAST API Docker container locally
 
-RUN LOCALLY
+RUN LOCALLY w/FRONTEND (STREAMING SUPPORTED)
 
 ```
    cd src
@@ -21,6 +21,9 @@ RUN LOCALLY
    docker build -t fast-agent .
 
    docker run --rm --interactive --env AWS_PROFILE=bach-dev --env AWS_REGION=us-east-1 -v //c/Users/eric/.aws:/root/.aws -p 8000:8000 fast-agent
+
+   Run frontend
+   npm run dev
 ```
 
 TESTS

@@ -38,17 +38,94 @@ export default function Home() {
     setInputValue('');
     setIsLoading(true);
 
-    // Simulate AI response (replace with actual API call later)
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: userMessage.content,
+        }),
+      });
+
+      if (!response.ok) {
+        // Try to get error details from the response
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.details) {
+            errorMessage += ` - ${errorData.details}`;
+          }
+          if (errorData.type) {
+            errorMessage += ` (${errorData.type})`;
+          }
+        } catch {
+          // If parsing JSON fails, use text response
+          const errorText = await response.text();
+          if (errorText) {
+            errorMessage += ` - ${errorText}`;
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Create assistant message with empty content that will be updated as chunks arrive
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: `I received your message: "${userMessage.content}". This is a placeholder response. The actual RAGBot functionality will be implemented later.`,
+        content: '',
         role: 'assistant',
         timestamp: new Date(),
       };
+
+      // Add the empty message to state first
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        let accumulatedContent = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            console.log('Streaming complete');
+            break;
+          }
+
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            accumulatedContent += chunk;
+
+            // Update the assistant message content in real-time
+            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg)));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error calling RAGBot API:', error);
+
+      let errorContent = 'Sorry, I encountered an error while processing your request. Please try again.';
+
+      // If it's a response error, try to get more details
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        errorContent += `\n\nError details: ${error.message}`;
+      }
+
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: errorContent,
+        role: 'assistant',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -68,9 +145,7 @@ export default function Home() {
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl px-4 py-2 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-primary text-primary-foreground ml-auto'
-                  : 'bg-muted text-muted-foreground'
+                message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-muted-foreground'
               }`}
             >
               <p className='whitespace-pre-wrap break-words'>{message.content}</p>
