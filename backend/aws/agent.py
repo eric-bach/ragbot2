@@ -106,7 +106,6 @@ def chat(request: ChatRequest):
                 
                 chunk_count = 0
                 async for event in agent_stream:
-                    logger.info(f"Event: {str(event)}")
                     if "data" in event:
                         # Only stream text chunks to the client
                         chunk_count += 1

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   id: string;
@@ -163,7 +165,21 @@ export default function Home() {
                   : 'bg-muted text-muted-foreground'
               }`}
             >
-              <p className='whitespace-pre-wrap break-words'>{message.content}</p>
+              {message.role === 'user' ? (
+                <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
+              ) : (
+                <div className='prose prose-sm max-w-none whitespace-pre-wrap break-words'>
+                  {(() => {
+                    const cleanedContent = message.content
+                      .replace(/<thinking>/g, '')
+                      .replace(/<\/thinking>/g, '')
+                      .replace(/<[^>]*>/g, '');
+                    // console.log('Original content:', message.content);
+                    // console.log('Cleaned content:', cleanedContent);
+                    return <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanedContent}</ReactMarkdown>;
+                  })()}
+                </div>
+              )}
               <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
             </div>
           </div>

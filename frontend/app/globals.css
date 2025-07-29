@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -119,4 +119,120 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Markdown styles */
+.prose {
+  @apply text-foreground;
+}
+
+/* Ensure markdown content is properly styled */
+.prose * {
+  @apply text-foreground;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  @apply font-semibold text-foreground mb-1 mt-2;
+}
+
+.prose h1 {
+  @apply text-2xl;
+}
+
+.prose h2 {
+  @apply text-xl;
+}
+
+.prose h3 {
+  @apply text-lg;
+}
+
+.prose p {
+  @apply mb-1;
+}
+
+.prose ul,
+.prose ol {
+  @apply mb-1 pl-4;
+}
+
+.prose li {
+  @apply mb-1;
+}
+
+.prose ul {
+  @apply list-disc;
+}
+
+.prose ol {
+  @apply list-decimal;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-muted pl-4 italic text-muted-foreground;
+}
+
+.prose code {
+  @apply bg-muted px-1 py-0.5 rounded text-sm font-mono;
+}
+
+.prose pre {
+  @apply bg-muted p-3 rounded overflow-x-auto;
+}
+
+.prose pre code {
+  @apply bg-transparent p-0;
+}
+
+.prose a {
+  @apply text-primary underline hover:text-primary/80;
+}
+
+.prose strong {
+  @apply font-semibold;
+}
+
+.prose em {
+  @apply italic;
+}
+
+.prose table {
+  @apply w-full border-collapse border border-border;
+}
+
+.prose th,
+.prose td {
+  @apply border border-border px-3 py-2 text-left;
+}
+
+.prose th {
+  @apply bg-muted font-semibold;
+}
+
+/* Additional styles for better markdown rendering */
+.prose {
+  @apply text-sm leading-relaxed;
+}
+
+.prose p:last-child {
+  @apply mb-0;
+}
+
+.prose ul:last-child,
+.prose ol:last-child {
+  @apply mb-0;
+}
+
+/* Ensure proper spacing for markdown elements */
+.prose > * + * {
+  @apply mt-1;
+}
+
+.prose > *:first-child {
+  @apply mt-0;
 }
