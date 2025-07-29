@@ -15,6 +15,7 @@ from aws_cdk import (
     aws_apigateway as apigateway,
     aws_route53 as route53,
     aws_route53_targets as targets,
+    CfnOutput,
     Duration,
     RemovalPolicy,
 )
@@ -288,7 +289,7 @@ class Ragbot2Stack(Stack):
                     cognito.OAuthScope.EMAIL # Optional
                 ],
                 #callback_urls=[f"https://{alb.load_balancer_dns_name}/oauth2/idpresponse"],
-                callback_urls=["https://ragbot2.ericbach.dev/oauth2/idpresponse"],
+                callback_urls=["https://ragbot2-alb.ericbach.dev/oauth2/idpresponse"],
             ),
         )
         
@@ -297,7 +298,7 @@ class Ragbot2Stack(Stack):
             "AgentUserPoolDomain",
             user_pool=user_pool,
             cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix="ragbot2"  # Must be globally unique
+                domain_prefix="ragbot2-alb"  # Must be globally unique
             ),
         )
 
@@ -410,7 +411,36 @@ class Ragbot2Stack(Stack):
             self,
             "ALBAliasRecord",
             zone=hosted_zone,
-            record_name="ragbot2",  # This creates ragbot.ericbach.dev
+            record_name="ragbot2-alb",  # This creates ragbot-alb.ericbach.dev
             target=route53.RecordTarget.from_alias(targets.LoadBalancerTarget(alb)),
             comment="Alias record for RAGBot ALB"
         )
+
+        # Output the Cognito User Pool ID
+        CfnOutput(
+            self,
+            "CognitoUserPoolId",
+            value=user_pool.user_pool_id,
+            description="Cognito User Pool ID",
+            export_name="Ragbot2CognitoUserPoolId"
+        )
+
+        # Output the React App Client ID
+        CfnOutput(
+            self,
+            "CognitoReactAppClientId",
+            value=react_user_pool_client.user_pool_client_id,
+            description="Cognito React App Client ID",
+            export_name="Ragbot2CognitoReactAppClientId"
+        )
+
+        # Output the ALB App Client ID
+        CfnOutput(
+            self,
+            "CognitoALBAppClientId",
+            value=alb_user_pool_client.user_pool_client_id,
+            description="Cognito ALB App Client ID",
+            export_name="Ragbot2CognitoALBAppClientId"
+        )
+
+        

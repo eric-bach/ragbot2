@@ -15,12 +15,13 @@ import {
 import { Amplify } from 'aws-amplify';
 import { ResourcesConfig } from '@aws-amplify/core';
 import { AuthUser } from 'aws-amplify/auth';
+import { AuthEventData } from '@aws-amplify/ui';
 
 import '@aws-amplify/ui-react/styles.css';
 
 interface ChatLayoutProps {
   children: React.ReactNode;
-  signOut?: ((data?: any) => void) | undefined;
+  signOut?: ((data?: AuthEventData | undefined) => void) | undefined;
   user?: AuthUser | undefined;
 }
 

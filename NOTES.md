@@ -8,9 +8,9 @@
 - [-] Create Bedrock Knowledge Base with S3 Vectors - NOT SUPPORTED YET
 - [x] Add Cognito authentication to ALB - REQUIRES CERTIFICATE
 - [x] Build frontend to connect to R53/ALB/ECS to test how streaming works with ECS
-- Add back ALG SG to ECS SG inbound rule sg-0fd5b56f5cf13efd1
-- Deploy frontend to Amplify
+- [x] Deploy frontend to Amplify
 - Clean up stack resources
+- [] Investigate adding Cognito auth to ALB
 
 - [] Move from ECS Fargate to Lambda Function URLs with auth in Lambda code
 - [] Switch frontend to connect to Lambda fURL to compare how streaming works with fURL
