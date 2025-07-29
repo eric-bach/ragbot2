@@ -39,6 +39,7 @@ export default function Home() {
     setIsLoading(true);
 
     try {
+      console.log('Making request to /api/chat...');
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -48,6 +49,10 @@ export default function Home() {
           query: userMessage.content,
         }),
       });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      console.log('Response ok:', response.ok);
 
       if (!response.ok) {
         // Try to get error details from the response
@@ -86,24 +91,32 @@ export default function Home() {
       const decoder = new TextDecoder();
 
       if (reader) {
+        console.log('Starting to read stream...');
         let accumulatedContent = '';
+        let chunkCount = 0;
 
         while (true) {
           const { done, value } = await reader.read();
 
           if (done) {
-            console.log('Streaming complete');
+            console.log('Streaming complete, total chunks:', chunkCount);
             break;
           }
 
           if (value) {
+            chunkCount++;
             const chunk = decoder.decode(value, { stream: true });
+            console.log(`Chunk ${chunkCount}:`, chunk.substring(0, 100));
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
-            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg)));
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg))
+            );
           }
         }
+      } else {
+        console.log('No reader available');
       }
     } catch (error) {
       console.error('Error calling RAGBot API:', error);
@@ -145,7 +158,9 @@ export default function Home() {
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl px-4 py-2 rounded-lg ${
-                message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-muted-foreground'
+                message.role === 'user'
+                  ? 'bg-primary text-primary-foreground ml-auto'
+                  : 'bg-muted text-muted-foreground'
               }`}
             >
               <p className='whitespace-pre-wrap break-words'>{message.content}</p>

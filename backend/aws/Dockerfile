@@ -19,4 +19,5 @@ EXPOSE 8000
 
 # Command to run the application with Uvicorn
 # - port: 8000
-CMD ["uvicorn", "fast_agent:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# - disable buffering for streaming
+CMD ["uvicorn", "fast_agent:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log", "--log-level", "info"]

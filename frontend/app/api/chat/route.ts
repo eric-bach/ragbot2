@@ -45,6 +45,9 @@ export async function POST(request: NextRequest) {
 
     // Stream the response directly to the frontend
     console.log('Setting up streaming response...');
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    console.log('Response status:', response.status);
+    console.log('Response body type:', typeof response.body);
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -68,7 +71,7 @@ export async function POST(request: NextRequest) {
 
             if (value) {
               const chunk = decoder.decode(value, { stream: true });
-              console.log('Streaming chunk to frontend, length:', chunk.length);
+              console.log('Streaming chunk to frontend, length:', chunk.length, 'content:', chunk.substring(0, 100));
               controller.enqueue(new TextEncoder().encode(chunk));
             }
           }
@@ -87,6 +90,8 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        'Transfer-Encoding': 'chunked',
       },
     });
   } catch (error) {
