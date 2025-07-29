@@ -10,9 +10,16 @@ export async function POST(request: NextRequest) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
+    // Get the ALB DNS name from environment variable
+    const albDnsName = process.env.NEXT_PUBLIC_ALB_DNS_NAME;
+    // Force rebuild to pick up new env vars - Amplify cache bust
+    if (!albDnsName) {
+      throw new Error('NEXT_PUBLIC_ALB_DNS_NAME environment variable is not set');
+    }
+
     //const response = await fetch('http://localhost:8000/chat', { // Local Docker - WORKING
     //const response = await fetch('http://54.162.125.152:8000/chat', { // ECS Container - WORKING
-    const response = await fetch('https://ragbot2.ericbach.dev/chat', {
+    const response = await fetch(`https://${albDnsName}/chat`, {
       // AWS ALB - WORKING
       method: 'POST',
       headers: {
@@ -30,7 +37,10 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('RAGBot API error response:', errorText);
-      return NextResponse.json({ error: `HTTP error! status: ${response.status}`, details: errorText }, { status: response.status });
+      return NextResponse.json(
+        { error: `HTTP error! status: ${response.status}`, details: errorText },
+        { status: response.status }
+      );
     }
 
     // Stream the response directly to the frontend

@@ -9,6 +9,9 @@
 - [x] Add Cognito authentication to ALB - REQUIRES CERTIFICATE
 - [x] Build frontend to connect to R53/ALB/ECS to test how streaming works with ECS
 - [x] Deploy frontend to Amplify
+- Fix backend returning formatted responses
+- Indicate what was used, RAG references in repsonse
+- Add adding/selecting tools
 - Clean up stack resources
 - [] Investigate adding Cognito auth to ALB
 
