@@ -9,11 +9,17 @@
 - [x] Add Cognito authentication to ALB - REQUIRES CERTIFICATE
 - [x] Build frontend to connect to R53/ALB/ECS to test how streaming works with ECS
 - [x] Deploy frontend to Vercel (Amplify doesn't support streaming)
-- [] Fix backend returning formatted responses
-- [] Indicate what was used, RAG references in repsonse
-- [] Add adding/selecting tools
+- [] Improve format of responses from AI agent
+- [] Include references to KB, web links, MCP server for sourced information in responses
+- [] Format markdown responses in UI
+
 - [] Clean up stack resource names
+
+- [] Display tools available in UI
+- [] Provide ability to add additional tools (MCP server config) in UI
+
 - [] Build architecture diagram
+
 - [] Investigate adding Cognito auth to ALB
 
 - [] Move from ECS Fargate to Lambda Function URLs with auth in Lambda code
