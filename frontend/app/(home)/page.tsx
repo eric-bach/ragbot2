@@ -170,13 +170,32 @@ export default function Home() {
               ) : (
                 <div className='prose prose-sm max-w-none whitespace-pre-wrap break-words'>
                   {(() => {
-                    const cleanedContent = message.content
-                      .replace(/<thinking>/g, '')
-                      .replace(/<\/thinking>/g, '')
-                      .replace(/<[^>]*>/g, '');
-                    // console.log('Original content:', message.content);
-                    // console.log('Cleaned content:', cleanedContent);
-                    return <ReactMarkdown remarkPlugins={[remarkGfm]}>{cleanedContent}</ReactMarkdown>;
+                    // Split content by thinking tags to handle them separately
+                    const parts = message.content.split(/(<thinking>.*?<\/thinking>)/g);
+
+                    return (
+                      <div>
+                        {parts.map((part, index) => {
+                          if (part.startsWith('<thinking>') && part.endsWith('</thinking>')) {
+                            // Extract content from thinking tags
+                            const thinkingContent = part.replace(/<thinking>(.*?)<\/thinking>/g, '$1');
+                            return (
+                              <div key={index} className='thinking-content'>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{thinkingContent}</ReactMarkdown>
+                              </div>
+                            );
+                          } else if (part.trim()) {
+                            // Regular content
+                            return (
+                              <div key={index}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{part}</ReactMarkdown>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    );
                   })()}
                 </div>
               )}
@@ -194,7 +213,7 @@ export default function Home() {
                   <div className='w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.15s]'></div>
                   <div className='w-2 h-2 bg-current rounded-full animate-bounce'></div>
                 </div>
-                <span className='text-sm'>RAGBot 2 is thinking...</span>
+                <span className='text-md'>RAGBot 2 is thinking...</span>
               </div>
             </div>
           </div>
