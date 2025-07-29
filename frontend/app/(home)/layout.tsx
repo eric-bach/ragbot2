@@ -36,12 +36,10 @@ function ChatLayout({ children, signOut, user }: ChatLayoutProps) {
       <nav className='flex-shrink-0 bg-card border-b border-border px-4 py-3'>
         <div className='max-w-4xl mx-auto flex items-center justify-between'>
           <div className='flex items-center space-x-3'>
-            <h1 className='text-xl font-semibold'>RAGBot Chat</h1>
+            <h1 className='text-xl font-semibold'>RAGBot 2</h1>
           </div>
           <div className='flex items-center space-x-4'>
-            <span className='text-sm text-muted-foreground'>
-              Welcome, {user.signInDetails?.loginId || user.username}
-            </span>
+            <span className='text-sm text-muted-foreground'>Hello, {user.signInDetails?.loginId || user.username}</span>
             <button
               onClick={() => signOut()}
               className='px-3 py-1.5 text-sm bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2'

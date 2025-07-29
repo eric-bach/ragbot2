@@ -8,11 +8,12 @@
 - [-] Create Bedrock Knowledge Base with S3 Vectors - NOT SUPPORTED YET
 - [x] Add Cognito authentication to ALB - REQUIRES CERTIFICATE
 - [x] Build frontend to connect to R53/ALB/ECS to test how streaming works with ECS
-- [x] Deploy frontend to Amplify
-- Fix backend returning formatted responses
-- Indicate what was used, RAG references in repsonse
-- Add adding/selecting tools
-- Clean up stack resources
+- [x] Deploy frontend to Vercel (Amplify doesn't support streaming)
+- [] Fix backend returning formatted responses
+- [] Indicate what was used, RAG references in repsonse
+- [] Add adding/selecting tools
+- [] Clean up stack resource names
+- [] Build architecture diagram
 - [] Investigate adding Cognito auth to ALB
 
 - [] Move from ECS Fargate to Lambda Function URLs with auth in Lambda code
@@ -36,7 +37,7 @@ RUN LOCALLY w/FRONTEND (STREAMING SUPPORTED)
 TESTS
 
 ```
-   curl -X GET http://localhost:8000/debug
+   curl -X GET http://localhost:8000/health
    curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the recommended tire pressure of a 07 Camry?"}'
    curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is AWS Lambda?"}'
    curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Seattle?"}'
@@ -59,20 +60,10 @@ DEPLOY
 TESTS
 
 ```
-   curl -X GET http://<PUBLIC IP>:8000/debug
-   curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
-   curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
-   curl -X POST http://<PUBLIC IP>:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
-
-   curl -X GET http://<ALB>/debug
-   curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
-   curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
-   curl -X POST http://<ALB>/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
-
-   curl -X GET http://<API GW URL>/debug
-   curl -X POST http://<API GW URL>/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
-   curl -X POST http://<API GW URL>/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
-   curl -X POST http://<API GW URL>/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
+   curl -X GET http://ragbot2.ericbach.dev/health
+   curl -X POST http://ragbot2.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
+   curl -X POST http://ragbot2.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
+   curl -X POST http://ragbot2.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
 ```
 
 ##### Questions

@@ -1,10 +1,14 @@
 import os
 import requests
 import json
+import logging
 from typing import Dict, Any
 from strands import tool
 from linkup import LinkupClient
 from dotenv import load_dotenv
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -50,4 +54,4 @@ def web_search(
 
 if __name__ == "__main__":
     response = web_search("What is the current price of bitcoin?")
-    print(response)
+    logger.info(response)

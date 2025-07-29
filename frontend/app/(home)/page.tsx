@@ -148,7 +148,7 @@ export default function Home() {
         {messages.length === 0 && (
           <div className='flex items-center justify-center h-full'>
             <div className='text-center text-muted-foreground'>
-              <h2 className='text-2xl font-semibold mb-2'>Welcome to RAGBot</h2>
+              <h2 className='text-2xl font-semibold mb-2'>Welcome to RAGBot 2</h2>
               <p>Start a conversation by typing a message below.</p>
             </div>
           </div>
@@ -157,7 +157,7 @@ export default function Home() {
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
-              className={`max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl px-4 py-2 rounded-lg ${
+              className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
                 message.role === 'user'
                   ? 'bg-primary text-primary-foreground ml-auto'
                   : 'bg-muted text-muted-foreground'
@@ -178,7 +178,7 @@ export default function Home() {
                   <div className='w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.15s]'></div>
                   <div className='w-2 h-2 bg-current rounded-full animate-bounce'></div>
                 </div>
-                <span className='text-sm'>RAGBot is thinking...</span>
+                <span className='text-sm'>RAGBot 2 is thinking...</span>
               </div>
             </div>
           </div>

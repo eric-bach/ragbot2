@@ -6,3 +6,4 @@ python-dotenv
 linkup-sdk
 fastapi[standard]
 uvicorn
+uv
