@@ -274,10 +274,13 @@ class Ragbot2Stack(Stack):
             "AgentUserPoolClient",
             user_pool=user_pool,
             generate_secret=True,  # Required for ALB integration
-            auth_flows=cognito.AuthFlow(user_password=True), #
+            auth_flows=cognito.AuthFlow(user_password=True),
             o_auth=cognito.OAuthSettings(
                 flows=cognito.OAuthFlows(authorization_code_grant=True),
-                scopes=[cognito.OAuthScope.EMAIL],
+                scopes=[
+                    cognito.OAuthScope.OPENID, # Required for ALB integration
+                    cognito.OAuthScope.EMAIL # Optional
+                ],
                 #callback_urls=[f"https://{alb.load_balancer_dns_name}/oauth2/idpresponse"],
                 callback_urls=["https://ragbot2.ericbach.dev/oauth2/idpresponse"],
             ),
@@ -310,20 +313,21 @@ class Ragbot2Stack(Stack):
         )
 
         # Create HTTPS listener with Cognito authentication
-        https_listener = alb.add_listener(
+        https_listener_https = alb.add_listener(
             "AgentHTTPSListener",
             port=443,
             certificates=[certificate],
-            default_action=actions.AuthenticateCognitoAction(
-                user_pool=user_pool,
-                user_pool_client=user_pool_client,
-                user_pool_domain=user_pool_domain,
-                next=elbv2.ListenerAction.forward([target_group])
-            )
+            default_action=elbv2.ListenerAction.forward([target_group]),
+            # default_action=actions.AuthenticateCognitoAction(
+            #     user_pool=user_pool,
+            #     user_pool_client=user_pool_client,
+            #     user_pool_domain=user_pool_domain,
+            #     next=elbv2.ListenerAction.forward([target_group])
+            # )
         )
 
         # Create HTTP listener that redirects to HTTPS
-        http_listener = alb.add_listener(
+        http_listener_http = alb.add_listener(
             "AgentHTTPListener",
             port=80,
             default_action=elbv2.ListenerAction.redirect(
