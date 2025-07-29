@@ -122,6 +122,8 @@ def chat(request: ChatRequest):
                 If you retrieve information from the knowledge base, you should include the source of the information in your response.
                 If you use the web_search tool, you should include the source of the information in your response.
                 If you use the aws-documentation-mcp-server tool, you should include the source of the information in your response.
+
+                For any links to the sources you used, include them in a <sources> tag in your response to differentiate them from the rest of your response.
                 """,
                 tools=tools,
                 model=bedrock_model,

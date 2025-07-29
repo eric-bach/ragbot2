@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import ToolsButton from '../components/ToolsButton';
+import TabbedResponse from '../components/TabbedResponse';
 
 interface Message {
   id: string;
@@ -169,36 +168,7 @@ export default function Home() {
               {message.role === 'user' ? (
                 <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
               ) : (
-                <div className='prose prose-sm max-w-none whitespace-pre-wrap break-words'>
-                  {(() => {
-                    // Split content by thinking tags to handle them separately
-                    const parts = message.content.split(/(<thinking>.*?<\/thinking>)/g);
-
-                    return (
-                      <div>
-                        {parts.map((part, index) => {
-                          if (part.startsWith('<thinking>') && part.endsWith('</thinking>')) {
-                            // Extract content from thinking tags
-                            const thinkingContent = part.replace(/<thinking>(.*?)<\/thinking>/g, '$1');
-                            return (
-                              <div key={index} className='thinking-content'>
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{thinkingContent}</ReactMarkdown>
-                              </div>
-                            );
-                          } else if (part.trim()) {
-                            // Regular content
-                            return (
-                              <div key={index}>
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{part}</ReactMarkdown>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })}
-                      </div>
-                    );
-                  })()}
-                </div>
+                <TabbedResponse content={message.content} />
               )}
               <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
             </div>

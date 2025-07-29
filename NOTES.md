@@ -14,6 +14,8 @@
 - [x] Format markdown responses in UI
 - [x] Display tools available in UI
 
+- [] Add ability to clear chat
+- [] Add ability to upload document
 - [] Clean up stack resource names
 
 - [] Build architecture diagram
@@ -35,6 +37,7 @@ RUN LOCALLY w/FRONTEND (STREAMING SUPPORTED)
    docker run --rm --interactive --env AWS_PROFILE=bach-dev --env AWS_REGION=us-east-1 -v //c/Users/eric/.aws:/root/.aws -p 8000:8000 fast-agent
 
    Run frontend
+
    npm run dev
 ```
 
