@@ -12,11 +12,9 @@
 - [x] Improve format of responses from AI agent
 - [x] Include references to KB, web links, MCP server for sourced information in responses
 - [x] Format markdown responses in UI
+- [x] Display tools available in UI
 
 - [] Clean up stack resource names
-
-- [] Display tools available in UI
-- [] Provide ability to add additional tools (MCP server config) in UI
 
 - [] Build architecture diagram
 
@@ -66,10 +64,11 @@ DEPLOY
 TESTS
 
 ```
-   curl -X GET http://ragbot2.ericbach.dev/health
-   curl -X POST http://ragbot2.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
-   curl -X POST http://ragbot2.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
-   curl -X POST http://ragbot2.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
+   curl -X GET https://ragbot2-alb.ericbach.dev/health
+   curl -X GET https://ragbot2-alb.ericbach.dev/tools
+   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
+   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
+   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
 ```
 
 ##### Questions

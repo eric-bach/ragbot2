@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ToolsButton from '../components/ToolsButton';
 
 interface Message {
   id: string;
@@ -213,7 +214,7 @@ export default function Home() {
                   <div className='w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.15s]'></div>
                   <div className='w-2 h-2 bg-current rounded-full animate-bounce'></div>
                 </div>
-                <span className='text-md'>RAGBot 2 is thinking...</span>
+                <span className='text-sm'>RAGBot 2 is thinking...</span>
               </div>
             </div>
           </div>
@@ -224,22 +225,44 @@ export default function Home() {
 
       {/* Input Area */}
       <div className='flex-shrink-0 border-t border-border p-4'>
-        <form onSubmit={handleSubmit} className='flex space-x-2'>
-          <input
-            type='text'
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder='Type your message...'
-            disabled={isLoading}
-            className='flex-1 px-4 py-2 rounded-lg border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed'
-          />
-          <button
-            type='submit'
-            disabled={!inputValue.trim() || isLoading}
-            className='px-6 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
-          >
-            Send
-          </button>
+        <form onSubmit={handleSubmit} className='max-w-4xl mx-auto'>
+          <div className='border border-input rounded-lg bg-background'>
+            {/* Text Input Row */}
+            <div className='relative'>
+              <input
+                type='text'
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder='Type your message...'
+                disabled={isLoading}
+                className='w-full px-4 py-3 border-0 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed'
+              />
+            </div>
+
+            {/* Buttons Row */}
+            <div className='flex items-center justify-between px-3 py-2'>
+              <ToolsButton />
+              <button
+                type='submit'
+                disabled={!inputValue.trim() || isLoading}
+                className='w-8 h-8 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center'
+              >
+                <svg
+                  width='16'
+                  height='16'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                >
+                  <path d='m22 2-7 20-4-9-9-4 20-7z' />
+                  <path d='M22 2 11 13' />
+                </svg>
+              </button>
+            </div>
+          </div>
         </form>
       </div>
     </div>

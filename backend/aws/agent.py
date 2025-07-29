@@ -69,6 +69,33 @@ def health():
         "LINKUP_API_KEY": f"***{os.getenv('LINKUP_API_KEY')[-3:]}"
     }
 
+@app.get("/tools")
+def get_tools():
+    """Get list of available tools for the AI agent"""
+    with aws_documentation_mcp_client:
+        aws_tools = aws_documentation_mcp_client.list_tools_sync()
+        all_tools = aws_tools + [web_search, http_request, retrieve]
+        
+        tools_info = []
+        for tool in all_tools:
+            try:
+                # Use your improved logic for getting tool names
+                if hasattr(tool, 'tool_name'):
+                    tool_name = tool.tool_name
+                else:
+                    tool_name = getattr(tool, '__name__', str(tool))
+                
+                tools_info.append({"name": tool_name})
+            except Exception as e:
+                logger.warning(f"Could not process tool {tool}: {e}")
+                # Add a fallback entry
+                tools_info.append({"name": f"Tool_{len(tools_info)}"})
+        
+        return {
+            "tools": tools_info,
+            "total_count": len(tools_info)
+        }
+
 @app.post('/chat')
 def chat(request: ChatRequest):
     async def generate(query: str):
