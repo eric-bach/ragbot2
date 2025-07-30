@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ToolsButton from '../components/ToolsButton';
 import TabbedResponse from '../components/TabbedResponse';
+import { useTools } from '../hooks/useTools';
 
 interface Message {
   id: string;
@@ -16,6 +17,7 @@ export default function Home() {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { tools, loading: toolsLoading, error: toolsError } = useTools();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -53,6 +55,7 @@ export default function Home() {
 
     try {
       console.log('Making request to /api/chat...');
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -72,15 +75,18 @@ export default function Home() {
         let errorMessage = `HTTP error! status: ${response.status}`;
         try {
           const errorData = await response.json();
+          console.error('Error response data:', errorData);
           if (errorData.details) {
             errorMessage += ` - ${errorData.details}`;
           }
           if (errorData.type) {
             errorMessage += ` (${errorData.type})`;
           }
-        } catch {
+        } catch (parseError) {
+          console.error('Failed to parse error response as JSON:', parseError);
           // If parsing JSON fails, use text response
           const errorText = await response.text();
+          console.error('Error response text:', errorText);
           if (errorText) {
             errorMessage += ` - ${errorText}`;
           }
@@ -136,6 +142,23 @@ export default function Home() {
     }
   };
 
+  // Show error state if tools failed to load
+  if (toolsError) {
+    return (
+      <div className='flex flex-col h-full max-w-4xl mx-auto'>
+        <div className='flex-1 overflow-y-auto px-4 py-4'>
+          <div className='flex items-center justify-center h-full'>
+            <div className='text-center text-red-600'>
+              <h2 className='text-xl font-semibold mb-2'>Failed to Initialize</h2>
+              <p className='mb-4'>Unable to load tools. Please refresh the page.</p>
+              <p className='text-sm text-muted-foreground'>Error: {toolsError}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='flex flex-col h-full max-w-4xl mx-auto'>
       {/* Messages Area */}
@@ -145,6 +168,11 @@ export default function Home() {
             <div className='text-center text-muted-foreground'>
               <h2 className='text-2xl font-semibold mb-2'>Welcome to RAGBot 2</h2>
               <p>Start a conversation by typing a message below.</p>
+              {toolsLoading ? (
+                <p className='text-sm mt-2 text-muted-foreground'>Loading tools in background...</p>
+              ) : (
+                <p className='text-sm mt-2'>Tools loaded: {tools.length} available</p>
+              )}
             </div>
           </div>
         )}
@@ -159,7 +187,7 @@ export default function Home() {
               {message.role === 'user' ? (
                 <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
               ) : (
-                <TabbedResponse content={message.content} />
+                <TabbedResponse key={message.id} content={message.content} />
               )}
               <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
             </div>
@@ -187,7 +215,9 @@ export default function Home() {
 
             {/* Buttons Row */}
             <div className='flex items-center justify-between px-3 py-2'>
-              <ToolsButton />
+              <div className='flex items-center space-x-2'>
+                <ToolsButton tools={tools} loading={toolsLoading} error={toolsError} />
+              </div>
               <button
                 type='submit'
                 disabled={!inputValue.trim() || isLoading}

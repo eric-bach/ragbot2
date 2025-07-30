@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import AnimatedLogo from './AnimatedLogo';
@@ -77,12 +77,25 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
         .replace(/<sources>[\s\S]*?<\/sources>/g, '')
         .trim();
 
+  // Check if we're in a streaming state (content is being built up)
+  // Show streaming only when there's thinking content but no response content at all
+  const hasResponseContent =
+    content.includes('<response>') ||
+    (content.includes('<thinking>') &&
+      !content.includes('<response>') &&
+      content
+        .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+        .replace(/<sources>[\s\S]*?<\/sources>/g, '')
+        .trim().length > 0);
+
+  const isStreaming = content.includes('<thinking>') && !hasResponseContent && thinkingContent;
+
   const tabs = [
     {
       id: 'answer' as TabType,
       label: 'Answer',
       content: answerContent,
-      disabled: !answerContent,
+      disabled: !answerContent && !isStreaming, // Never disable Answer tab during streaming
     },
     {
       id: 'sources' as TabType,
@@ -98,17 +111,7 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
     },
   ];
 
-  // Always default to Answer tab
-  const getInitialTab = (): TabType => {
-    return 'answer';
-  };
-
-  const [activeTab, setActiveTab] = useState<TabType>(getInitialTab());
-
-  // Keep the Answer tab selected (no automatic switching during streaming)
-
-  // Check if we're in a streaming state (content is being built up)
-  const isStreaming = content.includes('<thinking>') && !answerContent && thinkingContent;
+  const [activeTab, setActiveTab] = useState<TabType>('answer');
 
   return (
     <div className='w-full'>
@@ -159,7 +162,7 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
               </div>
             ) : (
               <div className='text-muted-foreground text-sm'>
-                {tab.id === 'answer' && !answerContent && isStreaming ? (
+                {tab.id === 'answer' && !hasResponseContent && isStreaming ? (
                   <div className='p-3 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30'>
                     <div className='flex items-center space-x-2 text-sm text-muted-foreground'>
                       <img src='/logo.png' alt='RAGBot Logo' className='w-4 h-4 animate-bounce' style={{ animationDelay: '-0.3s' }} />
