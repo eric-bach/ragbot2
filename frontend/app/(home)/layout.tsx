@@ -1,13 +1,24 @@
 'use client';
 
 import React from 'react';
-import { Authenticator, Button, Heading, Image, Theme, ThemeProvider, useAuthenticator, useTheme, View } from '@aws-amplify/ui-react';
+import {
+  Authenticator,
+  Button,
+  Heading,
+  Image,
+  Theme,
+  ThemeProvider,
+  useAuthenticator,
+  useTheme,
+  View,
+} from '@aws-amplify/ui-react';
 import { Amplify } from 'aws-amplify';
 import { ResourcesConfig } from '@aws-amplify/core';
 import { AuthUser } from 'aws-amplify/auth';
 import { AuthEventData } from '@aws-amplify/ui';
 
 import '@aws-amplify/ui-react/styles.css';
+import UserProfileDropdown from '../components/UserProfileDropdown';
 
 interface ChatLayoutProps {
   children: React.ReactNode;
@@ -29,15 +40,7 @@ function ChatLayout({ children, signOut, user }: ChatLayoutProps) {
             <img src='/logo.png' alt='RAGBot Logo' className='w-8 h-8' />
             <h1 className='text-xl font-semibold'>RAGBot 2</h1>
           </div>
-          <div className='flex items-center space-x-4'>
-            <span className='text-sm text-muted-foreground'>Hello, {user.signInDetails?.loginId || user.username}</span>
-            <button
-              onClick={() => signOut()}
-              className='px-3 py-1.5 text-sm bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2'
-            >
-              Sign Out
-            </button>
-          </div>
+          <UserProfileDropdown user={user} signOut={signOut} />
         </div>
       </nav>
 

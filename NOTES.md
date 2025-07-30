@@ -16,9 +16,9 @@
 - [x] BUG: Handle when response includes more than once occurrence of a tag
 - [x] Add copy text button and thumbs up/down buttons
 - [x] Add ability to upload document
+- [x] Move user profile to icon
 
 - [] Include history in chat
-- [] Move user profile to icon
 - [] Add ability to clear chat
 
 - [] Build architecture diagram
