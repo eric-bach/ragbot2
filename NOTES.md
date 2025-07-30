@@ -15,19 +15,21 @@
 - [x] Display tools available in UI
 - [x] BUG: Handle when response includes more than once occurrence of a tag
 - [x] Add copy text button and thumbs up/down buttons
+- [x] Add ability to upload document
 
-- [] BUG: The tabs keep switching when RAGBot is thinking
-- [] Add ability to upload document
-
+- [] Include history in chat
+- [] Move user profile to icon
 - [] Add ability to clear chat
-- [] Clean up stack resource names
 
 - [] Build architecture diagram
+- [] Clean up stack resource names
 
+- [] BUG: The tabs keep switching when RAGBot is thinking
+- [] Add polling on UI to check when Bedrock KB sync is completed
 - [] Investigate adding Cognito auth to ALB
 
 - [] Move from ECS Fargate to Lambda Function URLs with auth in Lambda code
-- [] Switch frontend to connect to Lambda fURL to compare how streaming works with fURL
+- [] Switch frontend to connect to Lambda fURL to compare how streaming works with fUR
 
 ##### Running FAST API Docker container locally
 

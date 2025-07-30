@@ -15,6 +15,8 @@ from aws_cdk import (
     aws_apigateway as apigateway,
     aws_route53 as route53,
     aws_route53_targets as targets,
+    aws_lambda as lambda_,
+    aws_s3_notifications as s3n,
     CfnOutput,
     Duration,
     RemovalPolicy,
@@ -31,10 +33,12 @@ class Ragbot2Stack(Stack):
         load_dotenv()
         
         # Get environment variables with fallbacks
-        knowledge_base_id = os.getenv('KNOWLEDGE_BASE_ID', '')
         aws_region = os.getenv('AWS_REGION', 'us-east-1')
-        linkup_api_key = os.getenv('LINKUP_API_KEY', '')
+        knowledge_base_id = os.getenv('KNOWLEDGE_BASE_ID', '')
+        knowledge_base_data_source_id = os.getenv('KNOWLEDGE_BASE_DATA_SOURCE_ID', '')
+        source_bucket_name = os.getenv('SOURCE_BUCKET_NAME', '')
         certificate_arn = os.getenv('CERTIFICATE_ARN', '')
+        linkup_api_key = os.getenv('LINKUP_API_KEY', '')
 
         # Add S3 bucket for source data
         bucket = s3.Bucket(
@@ -44,6 +48,54 @@ class Ragbot2Stack(Stack):
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
             versioned=True,
+        )
+
+        # Add CORS configuration to allow browser uploads
+        bucket.add_cors_rule(
+            allowed_methods=[s3.HttpMethods.PUT],
+            allowed_origins=["*"],  # In production, specify your domain
+            allowed_headers=["*"],  # Allow all headers for presigned URL uploads
+            exposed_headers=["ETag"],
+            max_age=3000,
+        )
+
+        # Create Lambda function for processing uploaded files
+        knowledge_base_sync_lambda = lambda_.Function(
+            self,
+            "KnowledgeBaseSyncLambda",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="knowledge_base_sync.handler",
+            code=lambda_.Code.from_asset(str(Path(__file__).parent.parent / "lambda")),
+            environment={
+                'KNOWLEDGE_BASE_ID': knowledge_base_id,
+                'KNOWLEDGE_BASE_DATA_SOURCE_ID': knowledge_base_data_source_id,
+            },
+            timeout=Duration.seconds(300),  # 5 minutes
+            memory_size=512,
+        )
+
+        # Grant the Lambda function permissions to read from S3
+        bucket.grant_read(knowledge_base_sync_lambda)
+
+        # Grant the Lambda function permissions to call Bedrock APIs
+        knowledge_base_sync_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "bedrock:StartIngestionJob",
+                    "bedrock:GetIngestionJob",
+                    "bedrock:ListIngestionJobs",
+                    "bedrock:GetKnowledgeBase",
+                    "bedrock:ListKnowledgeBases",
+                ],
+                resources=["*"],
+            )
+        )
+
+        # Add S3 event notification to trigger Lambda when files are uploaded
+        bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED_PUT,
+            s3n.LambdaDestination(knowledge_base_sync_lambda),
+            s3.NotificationKeyFilter(suffix='.pdf')
         )
 
         # # TODO Add Knowledge Bases with Vector S3 (when supported in CloudFormation)
@@ -145,6 +197,21 @@ class Ragbot2Stack(Stack):
             )
         )
 
+        # Add S3 permissions for the task to generate presigned URLs and upload files
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:ListBucket",
+                ],
+                resources=[
+                    f"{bucket.bucket_arn}",
+                    f"{bucket.bucket_arn}/*",
+                ],
+            )
+        )
+
         # Create a task definition
         task_definition = ecs.FargateTaskDefinition(
             self, 
@@ -181,7 +248,9 @@ class Ragbot2Stack(Stack):
                 "LOG_LEVEL": "INFO",
                 "AWS_REGION": aws_region,
                 "KNOWLEDGE_BASE_ID": knowledge_base_id,
-                "LINKUP_API_KEY": linkup_api_key
+                "KNOWLEDGE_BASE_DATA_SOURCE_ID": knowledge_base_data_source_id,
+                "SOURCE_BUCKET_NAME": bucket.bucket_name,
+                "LINKUP_API_KEY": linkup_api_key,
             },
             port_mappings=[
                 ecs.PortMapping(
@@ -422,6 +491,15 @@ class Ragbot2Stack(Stack):
             comment="Alias record for RAGBot ALB"
         )
 
+        # Output the S3 bucket name
+        CfnOutput(
+            self,
+            "S3BucketName",
+            value=bucket.bucket_name,
+            description="S3 Bucket Name",
+            export_name="Ragbot2SourceBucketName"
+        )
+
         # Output the Cognito User Pool ID
         CfnOutput(
             self,
@@ -447,6 +525,15 @@ class Ragbot2Stack(Stack):
             value=alb_user_pool_client.user_pool_client_id,
             description="Cognito ALB App Client ID",
             export_name="Ragbot2CognitoALBAppClientId"
+        )
+
+        # Output the Lambda function name
+        CfnOutput(
+            self,
+            "KnowledgeBaseSyncLambdaName",
+            value=knowledge_base_sync_lambda.function_name,
+            description="Lambda function for Knowledge Base sync",
+            export_name="Ragbot2KnowledgeBaseSyncLambdaName"
         )
 
         

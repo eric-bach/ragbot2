@@ -1,6 +1,8 @@
 import os
 import boto3
 import logging
+import json
+from botocore.config import Config
 from dotenv import load_dotenv
 from strands import Agent
 from strands_tools import http_request, retrieve
@@ -8,7 +10,7 @@ from strands.models import BedrockModel
 from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
 from tools.web_search import web_search
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -33,11 +35,21 @@ app.add_middleware(
 )
 
 load_dotenv()
-AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
-KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID')
+AWS_REGION = os.getenv('AWS_REGION', 'us-east-1') # Used by the Bedrock model
+KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID') # Used by the retrieve tool
+SOURCE_BUCKET_NAME = os.getenv('SOURCE_BUCKET_NAME') # Used by the presigned-url endpoint
+LINKUP_API_KEY = os.getenv('LINKUP_API_KEY') # Used by the web_search tool
 
 # Create session without profile for ECS deployment
 session = boto3.Session(region_name=AWS_REGION)
+
+# Create S3 client
+s3 = boto3.client(
+    "s3", 
+    endpoint_url=f"https://s3.{AWS_REGION}.amazonaws.com", 
+    config=Config(s3={"addressing_style": "virtual"}, 
+    region_name=AWS_REGION,
+    signature_version="s3v4"))
 
 # Create a Bedrock model with the custom session
 bedrock_model = BedrockModel(
@@ -64,9 +76,9 @@ def home():
 def health():
     return {
         "STATUS": "healthy",
-        "AWS_REGION": os.getenv('AWS_REGION'),
-        "KNOWLEDGE_BASE_ID": os.getenv('KNOWLEDGE_BASE_ID'),
-        "LINKUP_API_KEY": f"***{os.getenv('LINKUP_API_KEY')[-3:]}"
+        "AWS_REGION": AWS_REGION,
+        "KNOWLEDGE_BASE_ID": KNOWLEDGE_BASE_ID,
+        "LINKUP_API_KEY": f"***{LINKUP_API_KEY[-3:]}",
     }
 
 @app.get("/tools")
@@ -95,6 +107,53 @@ def get_tools():
             "tools": tools_info,
             "total_count": len(tools_info)
         }
+
+@app.get("/presigned-url")
+def generate_presigned_url(file_name: str = Query(..., description="Name of the file to upload")):
+    """Generate a presigned URL for S3 file upload"""
+    try:
+        # For now, we'll use a placeholder user_id since we don't have auth implemented yet
+        # In production, you'd get this from the authenticated user
+        user_id = "default_user"  # TODO: Replace with actual user authentication
+        
+        file_name_full = file_name
+        if not file_name_full.endswith('.pdf'):
+            file_name_full = f"{file_name}.pdf"
+        
+        file_name_clean = file_name_full.split(".pdf")[0]
+
+        # Always use the original filename - will overwrite if exists
+        key = f"{user_id}/{file_name_clean}.pdf/{file_name_clean}.pdf"
+
+        logger.info(
+            {
+                "user_id": user_id,
+                "file_name_full": file_name_full,
+                "file_name_clean": file_name_clean,
+                "key": key,
+            }
+        )
+
+        presigned_url = s3.generate_presigned_url(
+            ClientMethod="put_object",
+            Params={
+                "Bucket": SOURCE_BUCKET_NAME,
+                "Key": key,
+                "ContentType": "application/pdf",
+            },
+            ExpiresIn=300,
+            HttpMethod="PUT",
+        )
+
+        return {
+            "presignedurl": presigned_url,
+            "key": key,
+            "bucket": SOURCE_BUCKET_NAME
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating presigned URL: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating presigned URL: {str(e)}")
 
 @app.post('/chat')
 def chat(request: ChatRequest):
