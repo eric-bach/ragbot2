@@ -118,7 +118,9 @@ export default function Home() {
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
-            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg)));
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg))
+            );
           }
         }
       } else {
@@ -136,7 +138,9 @@ export default function Home() {
       }
 
       // Update the existing assistant message with error content
-      setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent } : msg)));
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent } : msg))
+      );
     } finally {
       setIsLoading(false);
     }
@@ -181,15 +185,19 @@ export default function Home() {
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
-                message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-muted-foreground'
+                message.role === 'user'
+                  ? 'bg-primary text-primary-foreground ml-auto'
+                  : 'bg-muted text-muted-foreground'
               }`}
             >
               {message.role === 'user' ? (
-                <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
+                <div>
+                  <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
+                  <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
+                </div>
               ) : (
                 <TabbedResponse key={message.id} content={message.content} />
               )}
-              <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
             </div>
           </div>
         ))}
@@ -223,7 +231,16 @@ export default function Home() {
                 disabled={!inputValue.trim() || isLoading}
                 className='w-8 h-8 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center'
               >
-                <svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                <svg
+                  width='16'
+                  height='16'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                >
                   <path d='m22 2-7 20-4-9-9-4 20-7z' />
                   <path d='M22 2 11 13' />
                 </svg>

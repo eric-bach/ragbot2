@@ -105,24 +105,25 @@ def chat(request: ChatRequest):
 
             agent = Agent(
                 system_prompt="""
-                You are a chatbot that answers questions with the following tools:
-                    - Web search via LinkUp API
-                    - Lookup for AWS documentation
-                    - Retrieval from Bedrock knowledge bases
+                You are a chatbot that answers questions with the following capabilities:
+                    - Web search using LinkUp API
+                    - AWS documentation lookup
+                    - Bedrock knowledge bases for specific topics
 
-                When answering questions that request timely, real-world, or dynamic information (such as current weather, stock prices, or news), use the web search tool directly, as the knowledge base is unlikely to contain up-to-date information.
-                For questions asking about company policies, internal knowledge, procedures, or static information that your organization maintains, consult the knowledge base first.
+                When answering questions that request timely, real-world, or dynamic information (such as current
+                weather, stock prices, or news), use the web search tool directly, as the knowledge base does not
+                contain up-to-date information.
+                For questions asking about company policies, internal knowledge, procedures, or static information,
+                check the knowledge base first.
                 For questions about AWS, use the AWS documentation tool.
-                If unsure or if both tools could be relevant, prefer sources that will provide the most accurate and recent answer, and explain your rationale in the <thinking> tag.
-
+                
                 Your output MUST follow this format, using ONLY these tags:
                     - <thinking>: Reflect on your approach and reasoning.
-                    - <response>: Only provide your human-readable answer here. Do NOT include any source links, citations, URLs, or attribution phrases.
-                    - <sources>: List all sources used to answer the question (URLs, document IDs, markdown links, etc). Place all source details ONLY here, and nowhere else.
-
+                    - <response>: Only provide your human-readable answer here. Do NOT include any source links, 
+                    citations, URLs, or attribution phrases.
+                    - <sources>: List all sources used to answer the question (URLs, document IDs, markdown links, etc).
+                    Place all source details ONLY here, and nowhere else.
                 Do NOT use any other tags or formats.
-                
-                Never mention, summarize, or link to your sources in the <response> tag. Source attribution must ONLY appear in <sources>.
                 
                 Always separate each section (<thinking>, <response>, <sources>) cleanly.
                 """,
@@ -139,7 +140,7 @@ def chat(request: ChatRequest):
                     if "data" in event:
                         # Only stream text chunks to the client
                         chunk_count += 1
-                        if chunk_count % 40 == 0:  # Log every 40th chunk
+                        if chunk_count % 60 == 0:  # Log every 60th chunk
                             logger.info(f"Streamed {chunk_count} chunks so far")
                         yield event['data']
                 logger.info(f"Streaming response complete - total chunks: {chunk_count}")

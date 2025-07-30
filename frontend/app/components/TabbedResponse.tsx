@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { ThumbsUp, ThumbsDown, Copy } from 'lucide-react';
 import AnimatedLogo from './AnimatedLogo';
 
 interface TabbedResponseProps {
@@ -12,13 +13,19 @@ interface TabbedResponseProps {
 type TabType = 'answer' | 'sources' | 'steps';
 
 export default function TabbedResponse({ content }: TabbedResponseProps) {
-  // Extract thinking content (steps)
-  const thinkingMatch = content.match(/<thinking>([\s\S]*?)<\/thinking>/);
-  const thinkingContent = thinkingMatch ? thinkingMatch[1].trim() : '';
+  // Extract all thinking content (steps) - handle multiple occurrences
+  const thinkingMatches = Array.from(content.matchAll(/<thinking>([\s\S]*?)<\/thinking>/g));
+  const thinkingContent = thinkingMatches
+    .map((match) => match[1].trim())
+    .filter((content) => content.length > 0)
+    .join('\n\n');
 
-  // Extract sources content
-  const sourcesMatch = content.match(/<sources>([\s\S]*?)<\/sources>/);
-  const rawSourcesContent = sourcesMatch ? sourcesMatch[1].trim() : '';
+  // Extract all sources content - handle multiple occurrences
+  const sourcesMatches = Array.from(content.matchAll(/<sources>([\s\S]*?)<\/sources>/g));
+  const rawSourcesContent = sourcesMatches
+    .map((match) => match[1].trim())
+    .filter((content) => content.length > 0)
+    .join('\n\n');
 
   // Parse and format sources if they exist
   const formatSources = (rawContent: string) => {
@@ -68,14 +75,18 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
 
   const sourcesContent = formatSources(rawSourcesContent);
 
-  // Extract response content
-  const responseMatch = content.match(/<response>([\s\S]*?)<\/response>/);
-  const answerContent = responseMatch
-    ? responseMatch[1].trim()
-    : content
-        .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
-        .replace(/<sources>[\s\S]*?<\/sources>/g, '')
-        .trim();
+  // Extract all response content - handle multiple occurrences
+  const responseMatches = Array.from(content.matchAll(/<response>([\s\S]*?)<\/response>/g));
+  const answerContent =
+    responseMatches.length > 0
+      ? responseMatches
+          .map((match) => match[1].trim())
+          .filter((content) => content.length > 0)
+          .join('\n\n')
+      : content
+          .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+          .replace(/<sources>[\s\S]*?<\/sources>/g, '')
+          .trim();
 
   // Check if we're in a streaming state (content is being built up)
   // Show streaming only when there's thinking content but no response content at all
@@ -113,6 +124,30 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
 
   const [activeTab, setActiveTab] = useState<TabType>('answer');
 
+  // Copy text functionality
+  const handleCopyText = async () => {
+    const currentTab = tabs.find((tab) => tab.id === activeTab);
+    if (currentTab && currentTab.content) {
+      try {
+        await navigator.clipboard.writeText(currentTab.content);
+        // You could add a toast notification here if desired
+      } catch (err) {
+        console.error('Failed to copy text: ', err);
+      }
+    }
+  };
+
+  // Feedback handlers (for future implementation)
+  const handleThumbsUp = () => {
+    // TODO: Implement feedback functionality
+    console.log('Thumbs up clicked');
+  };
+
+  const handleThumbsDown = () => {
+    // TODO: Implement feedback functionality
+    console.log('Thumbs down clicked');
+  };
+
   return (
     <div className='w-full'>
       {/* Tab Navigation */}
@@ -123,7 +158,9 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
             onClick={() => setActiveTab(tab.id)}
             disabled={tab.disabled}
             className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             } ${tab.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
             {tab.id === 'sources' && (
@@ -144,8 +181,14 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
             {tab.id === 'steps' && isStreaming && (
               <div className='flex space-x-1'>
                 <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'></div>
-                <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse' style={{ animationDelay: '0.2s' }}></div>
-                <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse' style={{ animationDelay: '0.4s' }}></div>
+                <div
+                  className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
+                  style={{ animationDelay: '0.2s' }}
+                ></div>
+                <div
+                  className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
+                  style={{ animationDelay: '0.4s' }}
+                ></div>
               </div>
             )}
           </button>
@@ -163,12 +206,15 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
             ) : (
               <div className='text-muted-foreground text-sm'>
                 {tab.id === 'answer' && !hasResponseContent && isStreaming ? (
-                  <div className='p-3 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30'>
-                    <div className='flex items-center space-x-2 text-sm text-muted-foreground'>
-                      <img src='/logo.png' alt='RAGBot Logo' className='w-4 h-4 animate-bounce' style={{ animationDelay: '-0.3s' }} />
-                      <AnimatedLogo text='RAGBot 2' isAnimating={true} size='sm' />
-                      <span>is cooking...</span>
-                    </div>
+                  <div className='flex items-center space-x-2 text-sm text-muted-foreground'>
+                    <img
+                      src='/logo.png'
+                      alt='RAGBot Logo'
+                      className='w-4 h-4 animate-bounce'
+                      style={{ animationDelay: '-0.3s' }}
+                    />
+                    <AnimatedLogo text='RAGBot 2' isAnimating={true} size='sm' />
+                    <span>is cooking...</span>
                   </div>
                 ) : tab.id === 'answer' ? (
                   'No answer content available'
@@ -181,6 +227,34 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
             )}
           </div>
         ))}
+      </div>
+
+      {/* Feedback Buttons */}
+      <div className='flex items-center justify-between mt-2 pt-2 border-t border-border'>
+        <div className='text-xs opacity-70'>{new Date().toLocaleTimeString()}</div>
+        <div className='flex items-center space-x-1'>
+          <button
+            onClick={handleThumbsUp}
+            className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
+            title='Thumbs up'
+          >
+            <ThumbsUp size={14} className='transition-colors duration-200 hover:text-primary' />
+          </button>
+          <button
+            onClick={handleThumbsDown}
+            className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
+            title='Thumbs down'
+          >
+            <ThumbsDown size={14} className='transition-colors duration-200 hover:text-primary' />
+          </button>
+          <button
+            onClick={handleCopyText}
+            className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
+            title='Copy text'
+          >
+            <Copy size={14} className='transition-colors duration-200 hover:text-primary' />
+          </button>
+        </div>
       </div>
     </div>
   );

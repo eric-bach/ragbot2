@@ -13,13 +13,13 @@
 - [x] Include references to KB, web links, MCP server for sourced information in responses
 - [x] Format markdown responses in UI
 - [x] Display tools available in UI
+- [x] BUG: Handle when response includes more than once occurrence of a tag
+- [x] Add copy text button and thumbs up/down buttons
 
-- [] BUG: Sometimes chunks continue to come in but are not displayed - could they be outside the tags?
 - [] BUG: The tabs keep switching when RAGBot is thinking
-- [] Add copy text button and thumbs up/down buttons
+- [] Add ability to upload document
 
 - [] Add ability to clear chat
-- [] Add ability to upload document
 - [] Clean up stack resource names
 
 - [] Build architecture diagram
