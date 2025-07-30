@@ -1,17 +1,7 @@
 'use client';
 
 import React from 'react';
-import {
-  Authenticator,
-  Button,
-  Heading,
-  Image,
-  Theme,
-  ThemeProvider,
-  useAuthenticator,
-  useTheme,
-  View,
-} from '@aws-amplify/ui-react';
+import { Authenticator, Button, Heading, Image, Theme, ThemeProvider, useAuthenticator, useTheme, View } from '@aws-amplify/ui-react';
 import { Amplify } from 'aws-amplify';
 import { ResourcesConfig } from '@aws-amplify/core';
 import { AuthUser } from 'aws-amplify/auth';

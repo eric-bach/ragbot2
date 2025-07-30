@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import AnimatedLogo from './AnimatedLogo';
 
 interface TabbedResponseProps {
   content: string;
@@ -67,11 +68,14 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
 
   const sourcesContent = formatSources(rawSourcesContent);
 
-  // Get answer content (everything except thinking and sources tags)
-  const answerContent = content
-    .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
-    .replace(/<sources>[\s\S]*?<\/sources>/g, '')
-    .trim();
+  // Extract response content
+  const responseMatch = content.match(/<response>([\s\S]*?)<\/response>/);
+  const answerContent = responseMatch
+    ? responseMatch[1].trim()
+    : content
+        .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+        .replace(/<sources>[\s\S]*?<\/sources>/g, '')
+        .trim();
 
   const tabs = [
     {
@@ -94,23 +98,14 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
     },
   ];
 
-  // Auto-select the first tab with content, prioritizing Answer > Steps > Sources
+  // Always default to Answer tab
   const getInitialTab = (): TabType => {
-    if (answerContent) return 'answer';
-    if (thinkingContent) return 'steps';
-    if (sourcesContent) return 'sources';
-    return 'answer'; // fallback
+    return 'answer';
   };
 
   const [activeTab, setActiveTab] = useState<TabType>(getInitialTab());
 
-  // Update active tab when content changes (for streaming responses)
-  useEffect(() => {
-    const newInitialTab = getInitialTab();
-    if (newInitialTab !== activeTab) {
-      setActiveTab(newInitialTab);
-    }
-  }, [content]);
+  // Keep the Answer tab selected (no automatic switching during streaming)
 
   // Check if we're in a streaming state (content is being built up)
   const isStreaming = content.includes('<thinking>') && !answerContent && thinkingContent;
@@ -125,9 +120,7 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
             onClick={() => setActiveTab(tab.id)}
             disabled={tab.disabled}
             className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+              activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             } ${tab.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
             {tab.id === 'sources' && (
@@ -148,14 +141,8 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
             {tab.id === 'steps' && isStreaming && (
               <div className='flex space-x-1'>
                 <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'></div>
-                <div
-                  className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
-                  style={{ animationDelay: '0.2s' }}
-                ></div>
-                <div
-                  className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
-                  style={{ animationDelay: '0.4s' }}
-                ></div>
+                <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse' style={{ animationDelay: '0.2s' }}></div>
+                <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse' style={{ animationDelay: '0.4s' }}></div>
               </div>
             )}
           </button>
@@ -172,28 +159,26 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
               </div>
             ) : (
               <div className='text-muted-foreground text-sm'>
-                {tab.id === 'answer' && 'No answer content available'}
-                {tab.id === 'sources' && 'No sources available'}
-                {tab.id === 'steps' && 'No steps available'}
+                {tab.id === 'answer' && !answerContent && isStreaming ? (
+                  <div className='p-3 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30'>
+                    <div className='flex items-center space-x-2 text-sm text-muted-foreground'>
+                      <img src='/logo.png' alt='RAGBot Logo' className='w-4 h-4 animate-bounce' style={{ animationDelay: '-0.3s' }} />
+                      <AnimatedLogo text='RAGBot 2' isAnimating={true} size='sm' />
+                      <span>is cooking...</span>
+                    </div>
+                  </div>
+                ) : tab.id === 'answer' ? (
+                  'No answer content available'
+                ) : tab.id === 'sources' ? (
+                  'No sources available'
+                ) : (
+                  'No steps available'
+                )}
               </div>
             )}
           </div>
         ))}
       </div>
-
-      {/* Streaming indicator for Answer tab when thinking is happening */}
-      {activeTab === 'answer' && isStreaming && (
-        <div className='mt-4 p-3 bg-muted/50 rounded-lg border border-dashed border-muted-foreground/30'>
-          <div className='flex items-center space-x-2 text-sm text-muted-foreground'>
-            <div className='flex space-x-1'>
-              <div className='w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.3s]'></div>
-              <div className='w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:-0.15s]'></div>
-              <div className='w-2 h-2 bg-primary rounded-full animate-bounce'></div>
-            </div>
-            <span>RAGBot is thinking and building the answer...</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

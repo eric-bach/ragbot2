@@ -261,6 +261,12 @@ class Ragbot2Stack(Stack):
             user_pool_name="ragbot-users",
             sign_in_aliases=cognito.SignInAliases(email=True),
             auto_verify=cognito.AutoVerifiedAttrs(email=True),
+            self_sign_up_enabled=True,
+            user_verification=cognito.UserVerificationConfig(
+                email_subject="Verify your email for RAGBot",
+                email_body="Welcome to RAGBot! Your verification code is: {####}",
+                email_style=cognito.VerificationEmailStyle.CODE,
+            ),
             password_policy=cognito.PasswordPolicy(
                 min_length=8,
                 require_lowercase=True,

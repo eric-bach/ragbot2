@@ -40,6 +40,17 @@ export default function Home() {
     setInputValue('');
     setIsLoading(true);
 
+    // Create assistant message immediately with thinking content to show loading state
+    const assistantMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      content: '<thinking>Processing your request...</thinking>',
+      role: 'assistant',
+      timestamp: new Date(),
+    };
+
+    // Add the assistant message immediately to show thinking state
+    setMessages((prev) => [...prev, assistantMessage]);
+
     try {
       console.log('Making request to /api/chat...');
       const response = await fetch('/api/chat', {
@@ -77,17 +88,6 @@ export default function Home() {
         throw new Error(errorMessage);
       }
 
-      // Create assistant message with empty content that will be updated as chunks arrive
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: '',
-        role: 'assistant',
-        timestamp: new Date(),
-      };
-
-      // Add the empty message to state first
-      setMessages((prev) => [...prev, assistantMessage]);
-
       // Handle streaming response
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -112,9 +112,7 @@ export default function Home() {
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
-            setMessages((prev) =>
-              prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg))
-            );
+            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg)));
           }
         }
       } else {
@@ -131,13 +129,8 @@ export default function Home() {
         errorContent += `\n\nError details: ${error.message}`;
       }
 
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: errorContent,
-        role: 'assistant',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      // Update the existing assistant message with error content
+      setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent } : msg)));
     } finally {
       setIsLoading(false);
     }
@@ -160,9 +153,7 @@ export default function Home() {
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-primary text-primary-foreground ml-auto'
-                  : 'bg-muted text-muted-foreground'
+                message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-muted-foreground'
               }`}
             >
               {message.role === 'user' ? (
@@ -174,21 +165,6 @@ export default function Home() {
             </div>
           </div>
         ))}
-
-        {isLoading && (
-          <div className='flex justify-start'>
-            <div className='bg-muted text-muted-foreground px-4 py-2 rounded-lg'>
-              <div className='flex items-center space-x-2'>
-                <div className='flex space-x-1'>
-                  <div className='w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.3s]'></div>
-                  <div className='w-2 h-2 bg-current rounded-full animate-bounce [animation-delay:-0.15s]'></div>
-                  <div className='w-2 h-2 bg-current rounded-full animate-bounce'></div>
-                </div>
-                <span className='text-sm'>RAGBot 2 is thinking...</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div ref={messagesEndRef} />
       </div>
@@ -217,16 +193,7 @@ export default function Home() {
                 disabled={!inputValue.trim() || isLoading}
                 className='w-8 h-8 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center'
               >
-                <svg
-                  width='16'
-                  height='16'
-                  viewBox='0 0 24 24'
-                  fill='none'
-                  stroke='currentColor'
-                  strokeWidth='2'
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                >
+                <svg width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
                   <path d='m22 2-7 20-4-9-9-4 20-7z' />
                   <path d='M22 2 11 13' />
                 </svg>
