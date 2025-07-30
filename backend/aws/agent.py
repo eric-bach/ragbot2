@@ -112,9 +112,8 @@ def chat(request: ChatRequest):
 
                 When answering questions that request timely, real-world, or dynamic information (such as current
                 weather, stock prices, or news), use the web search tool directly, as the knowledge base does not
-                contain up-to-date information.
-                For questions asking about company policies, internal knowledge, procedures, or static information,
-                check the knowledge base first.
+                contain up-to-date information. Otherwise, always try to use the knowledge base first before using 
+                the web search tool.
                 For questions about AWS, use the AWS documentation tool.
                 
                 Your output MUST follow this format, using ONLY these tags:
