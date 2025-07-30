@@ -29,7 +29,11 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        query: body.query,
+        user_id: body.user_id,
+        session_id: body.session_id, // Pass session_id to backend
+      }),
       signal: controller.signal,
     };
 
@@ -38,6 +42,7 @@ export async function POST(request: NextRequest) {
       headers: fetchOptions.headers,
       bodyLength: JSON.stringify(body).length,
       hasSignal: !!fetchOptions.signal,
+      sessionId: body.session_id,
     });
 
     const response = await fetch(backendUrl, fetchOptions);
@@ -51,31 +56,9 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('RAGBot API error response:', errorText);
-
-      // Provide more specific error messages based on status code
-      let errorMessage = `HTTP error! status: ${response.status}`;
-      let errorType = 'HTTPError';
-
-      if (response.status === 503) {
-        errorMessage = 'Backend service is temporarily unavailable. Please try again in a moment.';
-        errorType = 'ServiceUnavailable';
-      } else if (response.status === 502) {
-        errorMessage = 'Backend service is not responding. Please try again later.';
-        errorType = 'BadGateway';
-      } else if (response.status === 500) {
-        errorMessage = 'Backend encountered an internal error. Please try again.';
-        errorType = 'InternalServerError';
-      } else if (errorText) {
-        errorMessage += ` - ${errorText}`;
-      }
-
-      return NextResponse.json({ error: errorMessage, details: errorText, type: errorType }, { status: response.status });
+      return NextResponse.json({ error: 'Backend service error', details: errorText }, { status: response.status });
     }
 
-    // Stream the response directly to the frontend
-    console.log('Setting up streaming response...');
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-    console.log('Response status:', response.status);
     console.log('Response body type:', typeof response.body);
 
     const stream = new ReadableStream({
@@ -103,7 +86,12 @@ export async function POST(request: NextRequest) {
             if (value) {
               chunkCount++;
               const chunk = decoder.decode(value, { stream: true });
-              console.log(`Streaming chunk ${chunkCount} to frontend, length:`, chunk.length, 'content:', chunk.substring(0, 100));
+              console.log(
+                `Streaming chunk ${chunkCount} to frontend, length:`,
+                chunk.length,
+                'content:',
+                chunk.substring(0, 100)
+              );
               controller.enqueue(new TextEncoder().encode(chunk));
             }
           }
@@ -127,43 +115,9 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error proxying request to RAGBot API:', error);
-    console.error('Error name:', error instanceof Error ? error.name : 'Unknown');
-    console.error('Error message:', error instanceof Error ? error.message : 'Unknown');
-    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-
-    let errorMessage = 'Failed to process request';
-    let errorType = 'Unknown error';
-
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      errorType = error.constructor.name;
-
-      // Handle specific error types
-      if (error.name === 'AbortError') {
-        errorMessage = 'Request timed out after 30 seconds';
-        errorType = 'TimeoutError';
-      } else if (error.message.includes('fetch')) {
-        errorMessage = 'Network error - unable to reach RAGBot API. The backend service may be starting up.';
-        errorType = 'NetworkError';
-      } else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
-        errorMessage = 'Backend service is not available. Please try again in a moment.';
-        errorType = 'ConnectionError';
-      } else if (error.message.includes('getaddrinfo ENOTFOUND')) {
-        errorMessage = 'Cannot resolve backend hostname. Please check your configuration.';
-        errorType = 'DNSResolutionError';
-      } else if (error.message.includes('ECONNRESET')) {
-        errorMessage = 'Connection was reset by the backend. Please try again.';
-        errorType = 'ConnectionResetError';
-      }
-    }
-
+    console.error('Error in chat API route:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to process request',
-        details: errorMessage,
-        type: errorType,
-      },
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

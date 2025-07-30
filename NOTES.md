@@ -17,19 +17,29 @@
 - [x] Add copy text button and thumbs up/down buttons
 - [x] Add ability to upload document
 - [x] Move user profile to icon
+- [x] Include conversational history in a chat session
+- [x] Add ability to clear chat session
+- [x] Update README and add architecture diagram
 
-- [] Include history in chat
-- [] Add ability to clear chat
-
-- [] Build architecture diagram
 - [] Clean up stack resource names
-
 - [] BUG: The tabs keep switching when RAGBot is thinking
 - [] Add polling on UI to check when Bedrock KB sync is completed
 - [] Investigate adding Cognito auth to ALB
-
 - [] Move from ECS Fargate to Lambda Function URLs with auth in Lambda code
 - [] Switch frontend to connect to Lambda fURL to compare how streaming works with fUR
+
+##### Features
+
+- Tool capabiities
+  - RAG w/ability for users to upload documents
+  - Built in Web search tool
+  - Additional MCP servers support
+- Streaming responses from LLM
+  - Broken down into response, sources, thinking
+- Conversational History retained for each session
+  - Managed at the server-side, no additional tokens
+  - MISSING: No ability for the user to select from a previous session yet
+- MISSING: Authentication to backend
 
 ##### Running FAST API Docker container locally
 
@@ -89,5 +99,9 @@ TESTS
 
    How is the weather in Seattle today?
 
+   What is AWS Lambda?
    How many GSIs can I have on a DynamoDB table?
+
+   I like to drink green tea in the the afternoons, what are the health benefits?
+   What do I like to drink in the afternoon?
 ```

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send } from 'lucide-react';
+import { Send, Trash2 } from 'lucide-react';
+import { getCurrentUser } from 'aws-amplify/auth';
 import ToolsButton from '../components/ToolsButton';
 import UploadButton from '../components/UploadButton';
 import TabbedResponse from '../components/TabbedResponse';
@@ -18,8 +19,28 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
+  const [userId, setUserId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { tools, loading: toolsLoading, error: toolsError } = useTools();
+
+  // Generate session ID on component mount
+  useEffect(() => {
+    const getSessionId = async () => {
+      try {
+        const { userId } = await getCurrentUser();
+
+        console.log('User ID:', userId);
+
+        setUserId(userId);
+        setSessionId(crypto.randomUUID());
+      } catch (error) {
+        console.error('Error getting user ID:', error);
+      }
+    };
+
+    getSessionId();
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,6 +49,32 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const clearChat = async () => {
+    if (sessionId) {
+      try {
+        // Clear session on backend
+        const albDnsName = process.env.NEXT_PUBLIC_ALB_DNS_NAME;
+        if (albDnsName) {
+          const response = await fetch(`https://${albDnsName}/session/${userId}/${sessionId}`, {
+            method: 'DELETE',
+          });
+
+          console.log('Session cleared:', response);
+        }
+      } catch (error) {
+        console.error('Failed to clear session on backend:', error);
+      }
+    }
+
+    // Clear messages locally
+    setMessages([]);
+
+    // Generate new session ID
+    const newSessionId = crypto.randomUUID();
+    setSessionId(newSessionId);
+    console.log('Generated new session ID after clear:', newSessionId);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +103,7 @@ export default function Home() {
     setMessages((prev) => [...prev, assistantMessage]);
 
     try {
-      console.log('Making request to /api/chat...');
+      console.log('Making request to /api/chat with session ID:', sessionId);
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -64,6 +111,8 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          session_id: sessionId,
+          user_id: userId,
           query: userMessage.content,
         }),
       });
@@ -179,6 +228,10 @@ export default function Home() {
               ) : (
                 <p className='text-sm mt-2'>Tools loaded: {tools.length} available</p>
               )}
+              {sessionId && (
+                <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId.substring(0, 8)}...</p>
+              )}
+              <p className='text-xs mt-1 text-muted-foreground'>Memory: Last 10 message pairs</p>
             </div>
           </div>
         )}
@@ -229,13 +282,27 @@ export default function Home() {
                 <UploadButton />
                 <ToolsButton tools={tools} loading={toolsLoading} error={toolsError} />
               </div>
-              <button
-                type='submit'
-                disabled={!inputValue.trim() || isLoading}
-                className='w-8 h-8 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center'
-              >
-                <Send size={16} />
-              </button>
+              <div className='flex items-center space-x-2'>
+                {messages.length > 0 && (
+                  <button
+                    type='button'
+                    onClick={clearChat}
+                    disabled={isLoading}
+                    className='flex items-center space-x-1 text-muted-foreground hover:text-foreground transition-colors'
+                    title='Start a new chat'
+                  >
+                    <Trash2 size={14} />
+                    <span className='text-xs'>Clear Chat</span>
+                  </button>
+                )}
+                <button
+                  type='submit'
+                  disabled={!inputValue.trim() || isLoading}
+                  className='w-8 h-8 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center'
+                >
+                  <Send size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </form>

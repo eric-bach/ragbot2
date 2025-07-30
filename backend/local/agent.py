@@ -5,6 +5,7 @@ from strands import Agent
 from strands.models import BedrockModel
 from strands_tools import http_request, retrieve
 from strands.tools.mcp import MCPClient
+from strands.agent.conversation_manager import SummarizingConversationManager
 from mcp import stdio_client, StdioServerParameters
 from tools.web_search import web_search
 
@@ -43,50 +44,48 @@ aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
 ))
 
 def interactive_session():
+    # create conversation manager
+    conversation_manager = SummarizingConversationManager(
+        summary_ratio=0.3,
+        preserve_recent_messages=10
+    )
+
     with aws_documentation_mcp_client:
         tools = aws_documentation_mcp_client.list_tools_sync()
         tools += [web_search, http_request, retrieve]
 
-        # When a user asks you a question, you will first check it in your knowledge base. 
-        # You will evaluate if the returned chunks are relevant using a relevance score tool.
-                #         Response Format:
-                # Use the retrieve tool to search Bedrock knowledge bases about information on Cars
-                # Use the aws-documentation-mcp-server to get information on AWS documentation
-                # Use the web_search tool for web searches
+        agent = Agent(
+            agent_id="ragbot2",
+            system_prompt="""
+            You are a chatbot that answers questions with the following capabilities:
+                - Web search using LinkUp API
+                - AWS documentation lookup
+                - Bedrock knowledge bases for specific topics
 
+            When answering questions that request timely, real-world, or dynamic information (such as current
+            weather, stock prices, or news), use the web search tool directly, as the knowledge base does not
+            contain up-to-date information.
+            For questions asking about company policies, internal knowledge, procedures, or static information,
+            check the knowledge base first.
+            For questions about AWS, use the AWS documentation tool.
+            
+            Your output MUST follow this format, using ONLY these tags:
+                - <thinking>: Reflect on your approach and reasoning.
+                - <response>: Only provide your human-readable answer here. Do NOT include any source links, 
+                citations, URLs, or attribution phrases.
+                - <sources>: List all sources used to answer the question (URLs, document IDs, markdown links, etc).
+                Place all source details ONLY here, and nowhere else.
+            Do NOT use any other tags or formats.
+            
+            Always separate each section (<thinking>, <response>, <sources>) cleanly.
+            """,
+            tools=tools,
+            model=bedrock_model,
+            conversation_manager=conversation_manager
+        )
 
         while True:
-            agent = Agent(
-                system_prompt="""
-                You are a chatbot that answers questions with the following capabilities:
-                    - Web search using LinkUp API
-                    - AWS documentation lookup
-                    - Bedrock knowledge bases for specific topics
-
-                When answering questions that request timely, real-world, or dynamic information (such as current
-                weather, stock prices, or news), use the web search tool directly, as the knowledge base does not
-                contain up-to-date information.
-                For questions asking about company policies, internal knowledge, procedures, or static information,
-                check the knowledge base first.
-                For questions about AWS, use the AWS documentation tool.
-                
-                Your output MUST follow this format, using ONLY these tags:
-                    - <thinking>: Reflect on your approach and reasoning.
-                    - <response>: Only provide your human-readable answer here. Do NOT include any source links, 
-                    citations, URLs, or attribution phrases.
-                    - <sources>: List all sources used to answer the question (URLs, document IDs, markdown links, etc).
-                    Place all source details ONLY here, and nowhere else.
-                Do NOT use any other tags or formats.
-                
-                Always separate each section (<thinking>, <response>, <sources>) cleanly.
-                """,
-                tools=tools,
-                model=bedrock_model
-            )
-
-            # Get user input
             user_input = input("\n\n🤖 How can I help you?\n")
-
             if user_input.lower() in ["exit", "quit", "bye"]:
                 print("Goodbye!")
                 break

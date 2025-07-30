@@ -40,7 +40,17 @@ class Ragbot2Stack(Stack):
         certificate_arn = os.getenv('CERTIFICATE_ARN', '')
         linkup_api_key = os.getenv('LINKUP_API_KEY', '')
 
-        # Add S3 bucket for source data
+        # Add S3 bucket for Strands Agent sessions
+        sessions_bucket = s3.Bucket(
+            self,
+            "ragbot-sessions-bucket",
+            bucket_name=f"ragbot-sessions-bucket-{self.account}-{self.region}",
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            versioned=True,
+        )
+
+        # Add S3 bucket for knowledge base source data
         bucket = s3.Bucket(
             self,
             "ragbot-source-bucket",
@@ -203,11 +213,22 @@ class Ragbot2Stack(Stack):
                 actions=[
                     "s3:GetObject",
                     "s3:PutObject",
-                    "s3:ListBucket",
+                    "s3:DeleteObject",
+                ],
+                resources=[
+                    f"{bucket.bucket_arn}/*",
+                    f"{sessions_bucket.bucket_arn}/*",
+                ],
+            )
+        )
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:ListBucket"
                 ],
                 resources=[
                     f"{bucket.bucket_arn}",
-                    f"{bucket.bucket_arn}/*",
+                    f"{sessions_bucket.bucket_arn}",
                 ],
             )
         )
@@ -250,6 +271,7 @@ class Ragbot2Stack(Stack):
                 "KNOWLEDGE_BASE_ID": knowledge_base_id,
                 "KNOWLEDGE_BASE_DATA_SOURCE_ID": knowledge_base_data_source_id,
                 "SOURCE_BUCKET_NAME": bucket.bucket_name,
+                "SESSIONS_BUCKET_NAME": sessions_bucket.bucket_name,
                 "LINKUP_API_KEY": linkup_api_key,
             },
             port_mappings=[
@@ -489,6 +511,15 @@ class Ragbot2Stack(Stack):
             record_name="ragbot2-alb",  # This creates ragbot-alb.ericbach.dev
             target=route53.RecordTarget.from_alias(targets.LoadBalancerTarget(alb)),
             comment="Alias record for RAGBot ALB"
+        )
+
+        # Output the S3 bucket name
+        CfnOutput(
+            self,
+            "S3SessionsBucketName",
+            value=sessions_bucket.bucket_name,
+            description="Sessions S3 Bucket Name",
+            export_name="Ragbot2SessionsBucketName"
         )
 
         # Output the S3 bucket name

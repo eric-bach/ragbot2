@@ -1,133 +1,6 @@
 # RAGBot2 - Intelligent RAG Agent with Multi-Source Retrieval
 
-This is an intelligent RAG (Retrieval-Augmented Generation) chatbot that combines multiple information sources to provide comprehensive answers. The agent first searches your knowledge base using AWS Bedrock, evaluates relevance, and falls back to web search when needed.
-
-## Setup
-
-### Quick Setup (Recommended)
-
-Run the interactive setup script:
-
-```bash
-python setup.py
-```
-
-This will:
-
-- Check and install dependencies
-- Prompt you for your LinkUp API key
-- Create a `.env` file with your configuration
-
-### Manual Setup
-
-#### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-#### 2. Configure API Credentials and AWS Resources
-
-**Option A: Create a .env file (Recommended)**
-Create a `.env` file in your project root:
-
-```bash
-# LinkUp API Configuration
-LINKUP_API_KEY=your_actual_linkup_api_key
-
-# AWS Configuration
-AWS_PROFILE=bach-dev
-AWS_REGION=us-east-1
-
-# Bedrock Knowledge Base Configuration
-KNOWLEDGE_BASE_ID=your_knowledge_base_id
-```
-
-**Option B: Set Environment Variables**
-
-Linux/macOS:
-
-```bash
-export LINKUP_API_KEY=your_linkup_api_key
-```
-
-Windows (PowerShell):
-
-```powershell
-$env:LINKUP_API_KEY="your_linkup_api_key"
-```
-
-Windows (Command Prompt):
-
-```cmd
-set LINKUP_API_KEY=your_linkup_api_key
-```
-
-#### 3. Configure AWS Resources
-
-**AWS Credentials**: Make sure you have AWS credentials configured for the `bach-dev` profile, or update the profile name in `agent.py`.
-
-**Bedrock Knowledge Base**:
-
-- Create a knowledge base in AWS Bedrock with your documents
-- Note the Knowledge Base ID and add it to your `.env` file
-- Ensure your AWS profile has permissions to access Bedrock and your knowledge base
-
-## How It Works
-
-The RAGBot2 agent uses an intelligent multi-step approach to answer your questions:
-
-1. **Knowledge Base Search**: First queries your AWS Bedrock knowledge base using the `retrieve` tool
-2. **Relevance Evaluation**: Evaluates if the retrieved chunks are relevant to your question
-3. **Web Search Fallback**: If knowledge base results aren't relevant, performs web search using LinkUp API
-4. **Comprehensive Response**: Combines information from multiple sources to provide complete answers
-
-## Usage
-
-Run the interactive agent:
-
-```bash
-python agent.py
-```
-
-### Available Tools
-
-1. **retrieve**: Search AWS Bedrock knowledge bases for relevant information
-
-   - Automatically queries your configured knowledge base
-   - Returns relevant document chunks with metadata
-
-2. **web_search**: Perform web searches using LinkUp's Web Search API
-
-   - Parameters: query (search query to perform)
-   - Returns: Sourced answers with references from LinkUp API
-   - Used as fallback when knowledge base doesn't have relevant information
-
-3. **AWS Documentation**: Lookup AWS documentation (from aws-documentation-mcp-server)
-   - Access comprehensive AWS service documentation
-   - Get up-to-date information about AWS features and APIs
-
-### Example Usage
-
-The agent intelligently handles various types of questions:
-
-**Knowledge Base Questions** (searches your documents first):
-
-- "What does our company policy say about remote work?"
-- "How do we handle customer refunds?"
-- "What are the technical specifications for our product?"
-
-**Web Search Questions** (when knowledge base lacks information):
-
-- "What's the latest news about artificial intelligence?"
-- "Find current Python programming best practices"
-- "What is the current price of bitcoin?"
-
-**AWS Documentation Questions**:
-
-- "How do I configure an S3 bucket policy?"
-- "What are the latest Lambda runtime versions?"
-- "Explain AWS IAM roles and policies"
+This is an intelligent RAG (Retrieval-Augmented Generation) chatbot that combines multiple tools with MCP support to provide comprehensive answers. The agent allows contextual conversations with Bedrock Knowledge Base or additional tools like web search or supported MCP servers for additional information.
 
 ## Key Features
 
@@ -150,15 +23,128 @@ The agent intelligently handles various types of questions:
 - **AWS Documentation**: Access comprehensive AWS service documentation
 - **Multi-Model Support**: Uses Amazon Nova Micro for efficient processing
 
-## Error Handling
+### ChatBot
 
-The agent includes comprehensive error handling for:
+- **User Session Management**: Uses Strands Agents to manage user conversation sessions
+- **Streaming Responses**: Fully streaming of chat responses to user
 
-- Missing API credentials (LinkUp and AWS)
-- Network timeouts and connection issues
-- API rate limits and quota exceeded errors
-- Invalid responses from knowledge base or web search
-- AWS authentication and permission issues
+## Architecture
+
+![architecture](/docs/architecture.png)
+
+## Getting Started
+
+The project is structured into 3 folders:
+
+```
+/ragbot2/
+└── backend/
+    ├── aws/            # Strands Agent server code
+    └── local/          # Local Strands Agent for local testing
+└── frontend/           # NextJS frontend chatbot UI
+└── infrastructure/     # CDK code to deploy AWS resources (*Amazon Bedrock Knowledge Bases S3 Vectors is not supported yet so this needs to be manually created)
+```
+
+### Backend
+
+1. Install Dependencies
+
+```bash
+cd infrastructure
+pip install -r requirements.txt
+```
+
+2. Configure Backend Environment Variables
+
+Create a `.env` file in the `infrastructure/` folder:
+
+```bash
+# AWS Configuration
+AWS_REGION=your_aws_region
+
+# Bedrock Knowledge Base Configuration (this needs to be manually created in the AWS Console outside of CDK since it's not supported yet)
+KNOWLEDGE_BASE_ID=your_knowledge_base_id
+KNOWLEDGE_BASE_DATA_SOURCE_ID=your_knowledge_base_data_source_id
+
+# SSL Certificate for ALB
+CERTIFICATE_ARN=your_certificate_arn
+
+# LinkUp API Configuration
+LINKUP_API_KEY=your_actual_linkup_api_key
+```
+
+3. Deploy Backend
+
+```bash
+cdk deploy --profile AWS_PROFILE
+```
+
+### Frontend
+
+4. Configure Frontend Environment Variables
+
+Create a `.env` file in the `frontend/` folder and set the values from the CDK stack outputs:
+
+```bash
+NEXT_PUBLIC_COGNITO_USER_POOL_ID=
+NEXT_PUBLIC_COGNITO_CLIENT_ID=
+NEXT_PUBLIC_ALB_DNS_NAME=
+```
+
+5. The frontend is deployed via Vercel (AWS Amplify does not support streaming responses)
+
+### Local Testing
+
+To test the Strands Agent locally
+
+1. Configure the Environment Variables
+
+Create a `.env` file in the `backend/local/` folder:
+
+```bash
+# AWS Configuration
+AWS_REGION=your_aws_region
+AWS_PROFILE=your_aws_profile_name
+
+# Bedrock Knowledge Base Configuration (this needs to be manually created in the AWS Console outside of CDK since it's not supported yet)
+KNOWLEDGE_BASE_ID=your_knowledge_base_id
+
+# LinkUp API Configuration
+LINKUP_API_KEY=your_actual_linkup_api_key
+```
+
+2. Run the script
+
+```bash
+./run_agent.sh
+```
+
+## How It Works
+
+RAGBot 2 agent uses an intelligent multi-step approach to answer your questions:
+
+1. **Knowledge Base Search**: First queries your AWS Bedrock knowledge base using the `retrieve` tool
+2. **Relevance Evaluation**: Evaluates if the retrieved chunks are relevant to your question
+3. **Web Search**: If knowledge base results aren't relevant, performs `web search` using LinkUp API
+4. **MCP Servers**: If query is related to AWS, performs a lookup in the `AWS Documentation MCP Server`
+5. **Comprehensive Response**: Combines information from multiple sources to provide complete answers
+
+### Available Tools
+
+1. **retrieve**: Search AWS Bedrock knowledge bases for relevant information
+
+   - Automatically queries your configured knowledge base
+   - Returns relevant document chunks with metadata
+
+2. **web_search**: Perform web searches using LinkUp's Web Search API
+
+   - Parameters: query (search query to perform)
+   - Returns: Sourced answers with references from LinkUp API
+   - Used as fallback when knowledge base doesn't have relevant information
+
+3. **AWS Documentation**: Lookup AWS documentation (from aws-documentation-mcp-server)
+   - Access comprehensive AWS service documentation
+   - Get up-to-date information about AWS features and APIs
 
 ## Requirements & Notes
 

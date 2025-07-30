@@ -8,6 +8,8 @@ from strands import Agent
 from strands_tools import http_request, retrieve
 from strands.models import BedrockModel
 from strands.tools.mcp import MCPClient
+from strands.session.s3_session_manager import S3SessionManager
+from strands.agent.conversation_manager import SummarizingConversationManager
 from mcp import stdio_client, StdioServerParameters
 from tools.web_search import web_search
 from fastapi import FastAPI, HTTPException, Query
@@ -37,6 +39,7 @@ app.add_middleware(
 load_dotenv()
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1') # Used by the Bedrock model
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID') # Used by the retrieve tool
+SESSIONS_BUCKET_NAME = os.getenv('SESSIONS_BUCKET_NAME') # Used by Strands Agent sessions
 SOURCE_BUCKET_NAME = os.getenv('SOURCE_BUCKET_NAME') # Used by the presigned-url endpoint
 LINKUP_API_KEY = os.getenv('LINKUP_API_KEY') # Used by the web_search tool
 
@@ -66,7 +69,58 @@ aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
 ))
 
 class ChatRequest(BaseModel):
+    session_id: str
+    user_id: str
     query: str
+
+def build_agent_for_session(session_id: str, user_id: str) -> Agent:
+    """Builds and returns a Strands Agent to a persistent session in S3 
+    with conversation management"""
+    session_manager = S3SessionManager(
+        session_id=session_id,
+        bucket=SESSIONS_BUCKET_NAME,
+        prefix=f"sessions/user_{user_id}",
+        boto_session=session,
+        region_name=AWS_REGION
+    )
+    conversation_manager = SummarizingConversationManager(
+        summary_ratio=0.3,
+        preserve_recent_messages=10
+    )
+
+    with aws_documentation_mcp_client:
+        tools = aws_documentation_mcp_client.list_tools_sync() + [web_search, http_request, retrieve]
+
+    return Agent(
+        agent_id="ragbot2",
+        system_prompt="""
+        You are a chatbot that answers questions with the following capabilities:
+            - Web search using LinkUp API
+            - AWS documentation lookup
+            - Bedrock knowledge bases for specific topics
+
+        When answering questions that request timely, real-world, or dynamic information (such as current
+        weather, stock prices, or news), use the web search tool directly, as the knowledge base does not
+        contain up-to-date information. Otherwise, always try to use the knowledge base first before using 
+        the web search tool.
+        For questions about AWS, use the AWS documentation tool.
+        
+        Your output MUST follow this format, using ONLY these tags:
+            - <thinking>: Reflect on your approach and reasoning.
+            - <response>: Only provide your human-readable answer here. Do NOT include any source links, 
+            citations, URLs, or attribution phrases.
+            - <sources>: List all sources used to answer the question (URLs, document IDs, markdown links, etc).
+            Place all source details ONLY here, and nowhere else.
+        Do NOT use any other tags or formats.
+        
+        Always separate each section (<thinking>, <response>, <sources>) cleanly.
+        """,
+        tools=tools,
+        model=bedrock_model,
+        session_manager=session_manager,
+        conversation_manager=conversation_manager,
+        callback_handler=None
+    )
 
 @app.get("/")
 def home():
@@ -155,67 +209,55 @@ def generate_presigned_url(file_name: str = Query(..., description="Name of the 
         logger.error(f"Error generating presigned URL: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating presigned URL: {str(e)}")
 
-@app.post('/chat')
-def chat(request: ChatRequest):
-    async def generate(query: str):
-        with aws_documentation_mcp_client:
-            tools = aws_documentation_mcp_client.list_tools_sync()
-            tools += [web_search, http_request, retrieve]
-
-            agent = Agent(
-                system_prompt="""
-                You are a chatbot that answers questions with the following capabilities:
-                    - Web search using LinkUp API
-                    - AWS documentation lookup
-                    - Bedrock knowledge bases for specific topics
-
-                When answering questions that request timely, real-world, or dynamic information (such as current
-                weather, stock prices, or news), use the web search tool directly, as the knowledge base does not
-                contain up-to-date information. Otherwise, always try to use the knowledge base first before using 
-                the web search tool.
-                For questions about AWS, use the AWS documentation tool.
-                
-                Your output MUST follow this format, using ONLY these tags:
-                    - <thinking>: Reflect on your approach and reasoning.
-                    - <response>: Only provide your human-readable answer here. Do NOT include any source links, 
-                    citations, URLs, or attribution phrases.
-                    - <sources>: List all sources used to answer the question (URLs, document IDs, markdown links, etc).
-                    Place all source details ONLY here, and nowhere else.
-                Do NOT use any other tags or formats.
-                
-                Always separate each section (<thinking>, <response>, <sources>) cleanly.
-                """,
-                tools=tools,
-                model=bedrock_model,
-                callback_handler=None
-            )
-
-            try:
-                agent_stream = agent.stream_async(request.query)
-                
-                chunk_count = 0
-                async for event in agent_stream:
-                    if "data" in event:
-                        # Only stream text chunks to the client
-                        chunk_count += 1
-                        if chunk_count % 60 == 0:  # Log every 60th chunk
-                            logger.info(f"Streamed {chunk_count} chunks so far")
-                        yield event['data']
-                logger.info(f"Streaming response complete - total chunks: {chunk_count}")
-            except Exception as e:
-                logger.error(f"Error in agent stream: {str(e)}")
-                yield f"Error: {str(e)}"
-
-        if not request.query:
-            raise HTTPException(status_code=400, detail="No query provided")
-    
+@app.delete('/session/{user_id}/{session_id}')
+async def delete_session(user_id: str, session_id: str):
+    prefix = f"sessions/user_{user_id}/session_{session_id}/"
     try:
-        logger.info(f"Chat request received: {request.query}")
-
-        return StreamingResponse(
-            generate(request.query),
-            media_type="text/plain"
-        )
+        # List all objects under just the target session folder
+        response = s3.list_objects_v2(Bucket=SESSIONS_BUCKET_NAME, Prefix=prefix)
+        if 'Contents' in response:
+            objects_to_delete = [{'Key': obj['Key']} for obj in response['Contents']]
+            s3.delete_objects(
+                Bucket=SESSIONS_BUCKET_NAME,
+                Delete={'Objects': objects_to_delete}
+            )
+            return {"message": f"Deleted {len(objects_to_delete)} objects in session {session_id}"}
+        else:
+            return {"message": f"No objects found for session {session_id}"}
     except Exception as e:
-        logger.error(f"Error in chat endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": str(e)}
+
+@app.post('/chat')
+async def chat(request: ChatRequest):
+    if not request.query:
+        raise HTTPException(status_code=400, detail="No query provided")
+    if not request.session_id:
+        raise HTTPException(status_code=400, detail="No session_id provided")
+    if not request.user_id:
+        raise HTTPException(status_code=400, detail="No user_id provided")
+
+    async def generate(session_id: str, user_id: str, query: str):
+        agent = build_agent_for_session(session_id, user_id)
+
+        try:
+            agent_stream = agent.stream_async(query)
+            
+            chunk_count = 0
+            async for event in agent_stream:
+                if "data" in event:
+                    # Only stream text chunks to the client
+                    chunk_count += 1
+                    if chunk_count % 60 == 0:  # Log every 60th chunk
+                        logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
+                    yield event['data']
+            logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+        except Exception as e:
+            logger.error(f"Error in agent stream: {str(e)}")
+            yield f"Error: {str(e)}"
+
+    logger.info(f"Chat request received: session_id={request.session_id}, query={request.query}, user_id={request.user_id}")
+
+    return StreamingResponse(
+        generate(request.session_id, request.user_id, request.query),
+        media_type="text/plain"
+    )
