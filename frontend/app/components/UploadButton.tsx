@@ -5,7 +5,7 @@ import { Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
-export default function UploadButton() {
+export default function UploadButton({ userId }: { userId: string }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -82,7 +82,7 @@ export default function UploadButton() {
     try {
       // Step 1: Get presigned URL
       console.log('Getting presigned URL for:', file.name);
-      const presignedResponse = await fetch(`/api/presigned-url?file_name=${encodeURIComponent(file.name)}`);
+      const presignedResponse = await fetch(`/api/presigned-url?user_id=${encodeURIComponent(userId)}&file_name=${encodeURIComponent(file.name)}`);
 
       if (!presignedResponse.ok) {
         const errorData = await presignedResponse.json();
@@ -196,9 +196,7 @@ export default function UploadButton() {
       </button>
 
       {errorMessage && (
-        <div className='absolute top-full left-0 mt-1 px-2 py-1 text-xs bg-red-100 text-red-700 rounded shadow-lg z-10 max-w-xs'>
-          {errorMessage}
-        </div>
+        <div className='absolute top-full left-0 mt-1 px-2 py-1 text-xs bg-red-100 text-red-700 rounded shadow-lg z-10 max-w-xs'>{errorMessage}</div>
       )}
 
       <input ref={fileInputRef} type='file' onChange={handleFileChange} className='hidden' accept='.pdf' />

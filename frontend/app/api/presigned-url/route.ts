@@ -6,7 +6,12 @@ export async function GET(request: NextRequest) {
 
     // Get the file name from query parameters
     const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('user_id');
     const fileName = searchParams.get('file_name');
+
+    if (!userId) {
+      return NextResponse.json({ error: 'user_id parameter is required' }, { status: 400 });
+    }
 
     if (!fileName) {
       return NextResponse.json({ error: 'file_name parameter is required' }, { status: 400 });
@@ -22,7 +27,7 @@ export async function GET(request: NextRequest) {
       throw new Error('NEXT_PUBLIC_ALB_DNS_NAME environment variable is not set');
     }
 
-    const backendUrl = `https://${albDnsName}/presigned-url?file_name=${encodeURIComponent(fileName)}`;
+    const backendUrl = `https://${albDnsName}/presigned-url?user_id=${encodeURIComponent(userId)}&file_name=${encodeURIComponent(fileName)}`;
     console.log('Making request to backend URL:', backendUrl);
 
     const controller = new AbortController();
@@ -63,10 +68,7 @@ export async function GET(request: NextRequest) {
         errorMessage += ` - ${errorText}`;
       }
 
-      return NextResponse.json(
-        { error: errorMessage, details: errorText, type: errorType },
-        { status: response.status }
-      );
+      return NextResponse.json({ error: errorMessage, details: errorText, type: errorType }, { status: response.status });
     }
 
     const data = await response.json();

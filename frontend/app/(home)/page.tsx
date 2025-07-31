@@ -169,9 +169,7 @@ export default function Home() {
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
-            setMessages((prev) =>
-              prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg))
-            );
+            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg)));
           }
         }
       } else {
@@ -189,9 +187,7 @@ export default function Home() {
       }
 
       // Update the existing assistant message with error content
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent } : msg))
-      );
+      setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent } : msg)));
     } finally {
       setIsLoading(false);
     }
@@ -228,9 +224,7 @@ export default function Home() {
               ) : (
                 <p className='text-sm mt-2'>Tools loaded: {tools.length} available</p>
               )}
-              {sessionId && (
-                <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId.substring(0, 8)}...</p>
-              )}
+              {sessionId && <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId.substring(0, 8)}...</p>}
               <p className='text-xs mt-1 text-muted-foreground'>Memory: Last 10 message pairs</p>
             </div>
           </div>
@@ -240,9 +234,7 @@ export default function Home() {
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-primary text-primary-foreground ml-auto'
-                  : 'bg-muted text-muted-foreground'
+                message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-muted-foreground'
               }`}
             >
               {message.role === 'user' ? (
@@ -279,7 +271,7 @@ export default function Home() {
             {/* Buttons Row */}
             <div className='flex items-center justify-between px-3 py-2'>
               <div className='flex items-center space-x-2'>
-                <UploadButton />
+                <UploadButton userId={userId} />
                 <ToolsButton tools={tools} loading={toolsLoading} error={toolsError} />
               </div>
               <div className='flex items-center space-x-2'>

@@ -73,7 +73,7 @@ class ChatRequest(BaseModel):
     user_id: str
     query: str
 
-def build_agent_for_session(session_id: str, user_id: str) -> Agent:
+def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient) -> Agent:
     """Builds and returns a Strands Agent to a persistent session in S3 
     with conversation management"""
     session_manager = S3SessionManager(
@@ -87,9 +87,8 @@ def build_agent_for_session(session_id: str, user_id: str) -> Agent:
         summary_ratio=0.3,
         preserve_recent_messages=10
     )
-
-    with aws_documentation_mcp_client:
-        tools = aws_documentation_mcp_client.list_tools_sync() + [web_search, http_request, retrieve]
+    
+    tools = mcp_client.list_tools_sync() + [web_search, http_request, retrieve]
 
     return Agent(
         agent_id="ragbot2",
@@ -163,13 +162,9 @@ def get_tools():
         }
 
 @app.get("/presigned-url")
-def generate_presigned_url(file_name: str = Query(..., description="Name of the file to upload")):
+def generate_presigned_url(user_id: str = Query(..., description="User ID"), file_name: str = Query(..., description="Name of the file to upload")):
     """Generate a presigned URL for S3 file upload"""
     try:
-        # For now, we'll use a placeholder user_id since we don't have auth implemented yet
-        # In production, you'd get this from the authenticated user
-        user_id = "default_user"  # TODO: Replace with actual user authentication
-        
         file_name_full = file_name
         if not file_name_full.endswith('.pdf'):
             file_name_full = f"{file_name}.pdf"
@@ -177,7 +172,7 @@ def generate_presigned_url(file_name: str = Query(..., description="Name of the 
         file_name_clean = file_name_full.split(".pdf")[0]
 
         # Always use the original filename - will overwrite if exists
-        key = f"{user_id}/{file_name_clean}.pdf/{file_name_clean}.pdf"
+        key = f"{user_id}/{file_name_clean}.pdf"
 
         logger.info(
             {
@@ -237,23 +232,24 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="No user_id provided")
 
     async def generate(session_id: str, user_id: str, query: str):
-        agent = build_agent_for_session(session_id, user_id)
+        with aws_documentation_mcp_client:
+            agent = build_agent_for_session(session_id, user_id, mcp_client=aws_documentation_mcp_client)
 
-        try:
-            agent_stream = agent.stream_async(query)
-            
-            chunk_count = 0
-            async for event in agent_stream:
-                if "data" in event:
-                    # Only stream text chunks to the client
-                    chunk_count += 1
-                    if chunk_count % 60 == 0:  # Log every 60th chunk
-                        logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
-                    yield event['data']
-            logger.info(f"Streaming response complete - total chunks: {chunk_count}")
-        except Exception as e:
-            logger.error(f"Error in agent stream: {str(e)}")
-            yield f"Error: {str(e)}"
+            try:
+                agent_stream = agent.stream_async(query)
+                
+                chunk_count = 0
+                async for event in agent_stream:
+                    if "data" in event:
+                        # Only stream text chunks to the client
+                        chunk_count += 1
+                        if chunk_count % 60 == 0:  # Log every 60th chunk
+                            logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
+                        yield event['data']
+                logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+            except Exception as e:
+                logger.error(f"Error in agent stream: {str(e)}")
+                yield f"Error: {str(e)}"
 
     logger.info(f"Chat request received: session_id={request.session_id}, query={request.query}, user_id={request.user_id}")
 

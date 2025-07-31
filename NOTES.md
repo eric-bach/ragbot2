@@ -20,11 +20,14 @@
 - [x] Include conversational history in a chat session
 - [x] Add ability to clear chat session
 - [x] Update README and add architecture diagram
+- [x] BUG: Upload user documents under the user's id key in the S3 bucket
 
 - [] Clean up stack resource names
-- [] BUG: The tabs keep switching when RAGBot is thinking
+- [] BUG: The first request fails unless you wait a few seconds after loading the page
+
 - [] Add polling on UI to check when Bedrock KB sync is completed
 - [] Investigate adding Cognito auth to ALB
+- [] BUG: The tabs keep switching when RAGBot is thinking
 - [] Move from ECS Fargate to Lambda Function URLs with auth in Lambda code
 - [] Switch frontend to connect to Lambda fURL to compare how streaming works with fUR
 
@@ -43,17 +46,16 @@
 
 ##### Running FAST API Docker container locally
 
-RUN LOCALLY w/FRONTEND (STREAMING SUPPORTED)
+RUN AWS BUILD LOCALLY (STREAMING SUPPORTED)
 
 ```
-   cd src
+   Populate the .env file
 
+   cd backend/aws
    docker build -t fast-agent .
+   docker run --rm --interactive --env-file .env -v //c/Users/eric/.aws:/root/.aws -p 8000:8000 fast-agent
 
-   docker run --rm --interactive --env AWS_PROFILE=bach-dev --env AWS_REGION=us-east-1 -v //c/Users/eric/.aws:/root/.aws -p 8000:8000 fast-agent
-
-   Run frontend
-
+   cd frontend
    npm run dev
 ```
 
@@ -61,9 +63,9 @@ TESTS
 
 ```
    curl -X GET http://localhost:8000/health
-   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the recommended tire pressure of a 07 Camry?"}'
-   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is AWS Lambda?"}'
-   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Seattle?"}'
+   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the recommended tire pressure of a 07 Camry?", "session_id": "1", "user_id": "1"}'
+   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is AWS Lambda?", "session_id": "1", "user_id": "1"}'
+   curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Seattle?", "session_id": "1", "user_id": "1"}'
 ```
 
 ##### Deploying to AWS
@@ -71,13 +73,13 @@ TESTS
 DEPLOY
 
 ```
-   cd backend
+   cd infrastructure
 
    python -m venv .venv
 
    pip install -r requirements.txt
 
-   cdk deploy --profile bach-dev
+   cdk deploy --profile bach-prod
 ```
 
 TESTS
@@ -85,9 +87,9 @@ TESTS
 ```
    curl -X GET https://ragbot2-alb.ericbach.dev/health
    curl -X GET https://ragbot2-alb.ericbach.dev/tools
-   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?"}'
-   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?"}'
-   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?"}'
+   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?", "session_id": "1", "user_id": "1"}'
+   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?", "session_id": "1", "user_id": "1"}'
+   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?", "session_id": "1", "user_id": "1"}'
 ```
 
 ##### Questions

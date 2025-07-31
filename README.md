@@ -40,9 +40,13 @@ The project is structured into 3 folders:
 /ragbot2/
 └── backend/
     ├── aws/            # Strands Agent server code
+         ├── .env       # .env file required for running locally
     └── local/          # Local Strands Agent for local testing
+         ├── .env       # .env file required for running locally
 └── frontend/           # NextJS frontend chatbot UI
+    ├── .env.local      # .env file for frontend client
 └── infrastructure/     # CDK code to deploy AWS resources (*Amazon Bedrock Knowledge Bases S3 Vectors is not supported yet so this needs to be manually created)
+    ├── .env            # .env file required for deploying backend resources
 ```
 
 ### Backend
