@@ -23,6 +23,7 @@
 - [x] BUG: Upload user documents under the user's id key in the S3 bucket
 
 - [] Clean up stack resource names
+- [] Build estimate cost list
 - [] BUG: The first request fails unless you wait a few seconds after loading the page
 
 - [] Add polling on UI to check when Bedrock KB sync is completed
