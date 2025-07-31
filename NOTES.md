@@ -21,9 +21,9 @@
 - [x] Add ability to clear chat session
 - [x] Update README and add architecture diagram
 - [x] BUG: Upload user documents under the user's id key in the S3 bucket
+- [x] Build estimate cost list
 
 - [] Clean up stack resource names
-- [] Build estimate cost list
 - [] BUG: The first request fails unless you wait a few seconds after loading the page
 - [] Investigate Strands Observability
 

@@ -150,6 +150,22 @@ RAGBot 2 agent uses an intelligent multi-step approach to answer your questions:
    - Access comprehensive AWS service documentation
    - Get up-to-date information about AWS features and APIs
 
+## Pricing
+
+Estimated monthly costs (USD) for running in an AWS account:
+
+| Service               | Rate (us-west-2)           | Quantity | Estimated cost    |
+| --------------------- | -------------------------- | -------- | ----------------- |
+| Elastic Load Balacing | $0.0225 per hour           | 720      | $16.20            |
+| VPC public IPv4       | $0.005 per hour            | 720      | $3.60             |
+| ECS Fargate (Memory)  | $0.00356 per hour          | 280      | $1.00 (estimated) |
+| Route 53              | $0.50 per Hosted Zone      | 1        | $0.50             |
+| ECS Fargate (vCPU)    | $0.03238 per hour          | 75       | $2.50 (estimated) |
+| Bedrock (Nova Lite)   | $0.035 per 1M input tokens | 10       | $0.50 (estimated) |
+| Bedrock (Nova Lite)   | $0.14 per 1M output tokens | 2        | $0.20 (estimated) |
+| S3                    | $0.023 per GB              | 2        | $0.05 (estimated) |
+| **TOTAL (estimated)** |                            |          | **$24.55**        |
+
 ## Requirements & Notes
 
 ### Prerequisites
