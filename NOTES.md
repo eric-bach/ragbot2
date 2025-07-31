@@ -25,6 +25,7 @@
 - [] Clean up stack resource names
 - [] Build estimate cost list
 - [] BUG: The first request fails unless you wait a few seconds after loading the page
+- [] Investigate Strands Observability
 
 - [] Add polling on UI to check when Bedrock KB sync is completed
 - [] Investigate adding Cognito auth to ALB
