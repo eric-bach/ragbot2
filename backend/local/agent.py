@@ -11,6 +11,7 @@ from tools.web_search import web_search
 
 load_dotenv()
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
+BEDROCK_MODEL_ID = os.getenv('BEDROCK_MODEL_ID')
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID')
 
 # Create session without profile for ECS deployment
@@ -18,9 +19,7 @@ session = boto3.Session(region_name=AWS_REGION)
 
 # Create a Bedrock model with the custom session
 bedrock_model = BedrockModel(
-    #model_id="us.anthropic.claude-sonnet-4-20250514-v1:0", # Slow, but most accurate
-    model_id="amazon.nova-lite-v1:0", # Very fast, but not good enough for production
-    #model_id="amazon.nova-pro-v1:0", # Fast and fairly good
+    model_id=BEDROCK_MODEL_ID,
     boto_session=session
 )
 
@@ -57,27 +56,38 @@ def interactive_session():
         agent = Agent(
             agent_id="ragbot2",
             system_prompt="""
-            You are a chatbot that answers questions with the following capabilities:
-                - Web search using LinkUp API
-                - AWS documentation lookup
-                - Bedrock knowledge bases for specific topics
+            You are an AI assistant that helps users answer any type of questions with three essential tools:
+                - Web search using LinkUp API (web_search)
+                - AWS documentation (MCP tools)
+                - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)
+                
+            **Instructions:**
+            - For EVERY user query, you MUST call and use at least one tool (never answer from your own knowledge, 
+            even if you think you know the answer).
+            - Only answer after reviewing results from all relevant tools.
+            - NEVER answer based solely on your internal knowledge.
+            - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
+                - <thinking>: Explain your approach, reasoning, and tool choices.
+                - <response>: Provide a clear, human-readable answer.
+                - <sources>: List ALL tool outputs and/or sources used.
+            - If you cannot get results from any tool, state this honestly IN the <response> tag - do not answer from memory.
+            - Do NOT output anything except these three tags.
+            
+            **Example valid output:**
+            <thinking>
+            I used both web_search and retrieve because the user asked about current events and general knowledge.
+            </thinking>
 
-            When answering questions that request timely, real-world, or dynamic information (such as current
-            weather, stock prices, or news), use the web search tool directly, as the knowledge base does not
-            contain up-to-date information.
-            For questions asking about company policies, internal knowledge, procedures, or static information,
-            check the knowledge base first.
-            For questions about AWS, use the AWS documentation tool.
+            <response>
+            Here is the answer to your question based on the latest available sources...
+            </response>
 
-            Your output MUST follow this format, using ONLY these tags:
-                - <thinking>: Reflect on your approach and reasoning.
-                - <response>: Only provide your human-readable answer here. Do NOT include any source links, 
-                citations, URLs, or attribution phrases.
-                - <sources>: List all sources used to answer the question (URLs, document IDs, markdown links, etc).
-                Place all source details ONLY here, and nowhere else.
-            Do NOT use any other tags or formats.
+            <sources>
+            - web_search: [search summary]
+            - retrieve: [document snippet]
+            </sources>
 
-            Always separate each section (<thinking>, <response>, <sources>) cleanly.
+            Always follow this response structure and do NOT skip tool calls, otherwise your response is considered invalid.
             """,
             tools=tools,
             model=bedrock_model,

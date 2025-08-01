@@ -24,6 +24,7 @@
 - [x] Build estimate cost list
 
 - [] Clean up stack resource names
+- [] Add checks to check env variables exist
 - [] BUG: The first request fails unless you wait a few seconds after loading the page
   - Add retry button
 - [] Investigate Strands Observability

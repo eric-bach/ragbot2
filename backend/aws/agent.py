@@ -38,6 +38,7 @@ app.add_middleware(
 
 load_dotenv()
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1') # Used by the Bedrock model
+BEDROCK_MODEL_ID = os.getenv('BEDROCK_MODEL_ID') 
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID') # Used by the retrieve tool
 SESSIONS_BUCKET_NAME = os.getenv('SESSIONS_BUCKET_NAME') # Used by Strands Agent sessions
 SOURCE_BUCKET_NAME = os.getenv('SOURCE_BUCKET_NAME') # Used by the presigned-url endpoint
@@ -56,9 +57,7 @@ s3 = boto3.client(
 
 # Create a Bedrock model with the custom session
 bedrock_model = BedrockModel(
-    #model_id="us.anthropic.claude-sonnet-4-20250514-v1:0", # Slow, but most accurate
-    model_id="amazon.nova-lite-v1:0", # Very fast, but not good enough for production
-    #model_id="amazon.nova-pro-v1:0", # Fast and fairly good
+    model_id=BEDROCK_MODEL_ID,
     boto_session=session
 )
 
@@ -95,7 +94,7 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
     return Agent(
         agent_id="ragbot2",
         system_prompt="""
-        You are an AI chatbot with three essential tools:
+        You are an AI assistant that helps users answer any type of questions with three essential tools:
             - Web search using LinkUp API (web_search)
             - AWS documentation (MCP tools)
             - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)
@@ -103,22 +102,15 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
         **Instructions:**
         - For EVERY user query, you MUST call and use at least one tool (never answer from your own knowledge, 
         even if you think you know the answer).
-        - Do NOT respond until you have attempted to use all relevant tools. Only answer after reviewing tool outputs.
-        - NEVER answer from your training data or general world knowledge alone. Every answer MUST reference tool 
-        outputs.
-        - Your reply must ALWAYS use EXACTLY the following three tags in Markdown format:
-            - <thinking>: Briefly explain your approach and reasoning.
-            - <response>: Provide a clear, human-readable answer. Do NOT include any links, citations, URLs, or attribution here.
-            - <sources>: List ALL tool outputs or sources used.
+        - Only answer after reviewing results from all relevant tools.
+        - NEVER answer based solely on your internal knowledge.
+        - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
+            - <thinking>: Explain your approach, reasoning, and tool choices.
+            - <response>: Provide a clear, human-readable answer.
+            - <sources>: List ALL tool outputs and/or sources used.
         - If you cannot get results from any tool, state this honestly IN the <response> tag - do not answer from memory.
-        - Do NOT output anything except the three required tags.  Do NOT use your own knowledge in the <response> section.
+        - Do NOT output anything except these three tags.
         
-        **Formatting Violations:**
-        Incorrect outputs include:
-        - Plain text without the three markdown tags.
-        - Any direct answer not based on tool usage.
-        - Repetition of tag sections or extra formatting/tags.
-
         **Example valid output:**
         <thinking>
         I used both web_search and retrieve because the user asked about current events and general knowledge.
@@ -133,9 +125,7 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
         - retrieve: [document snippet]
         </sources>
 
-        If you violate any of the above formatting rules or attempt to answer from your knowledge, consider your response invalid.
-
-        Always follow these steps and do NOT skip tool calls or format requirements.
+        Always follow this response structure and do NOT skip tool calls, otherwise your response is considered invalid.
         """,
         tools=tools,
         model=bedrock_model,

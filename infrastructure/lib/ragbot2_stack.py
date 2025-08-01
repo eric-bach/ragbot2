@@ -34,9 +34,9 @@ class Ragbot2Stack(Stack):
         
         # Get environment variables with fallbacks
         aws_region = os.getenv('AWS_REGION', 'us-east-1')
+        bedrock_model_id = os.getenv('BEDROCK_MODEL_ID', '')
         knowledge_base_id = os.getenv('KNOWLEDGE_BASE_ID', '')
         knowledge_base_data_source_id = os.getenv('KNOWLEDGE_BASE_DATA_SOURCE_ID', '')
-        source_bucket_name = os.getenv('SOURCE_BUCKET_NAME', '')
         certificate_arn = os.getenv('CERTIFICATE_ARN', '')
         linkup_api_key = os.getenv('LINKUP_API_KEY', '')
 
@@ -268,6 +268,7 @@ class Ragbot2Stack(Stack):
                 # Add any environment variables needed by your application
                 "LOG_LEVEL": "INFO",
                 "AWS_REGION": aws_region,
+                "BEDROCK_MODEL_ID": bedrock_model_id,
                 "KNOWLEDGE_BASE_ID": knowledge_base_id,
                 "KNOWLEDGE_BASE_DATA_SOURCE_ID": knowledge_base_data_source_id,
                 "SOURCE_BUCKET_NAME": bucket.bucket_name,
