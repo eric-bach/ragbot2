@@ -26,7 +26,7 @@
 
 - [] Improve the feel of the responsiveness of responses after the message is submitted
 - [] Clean up stack resource names
-
+- [] Add checks to check env variables exist
 - [] Investigate Strands Observability
 
 - [] Investigate adding Cognito auth to ALB
