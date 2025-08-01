@@ -62,13 +62,6 @@ bedrock_model = BedrockModel(
     boto_session=session
 )
 
-aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
-    StdioServerParameters(
-        command="uvx", 
-        args=["awslabs.aws-documentation-mcp-server@latest"]
-    )
-))
-
 class ChatRequest(BaseModel):
     session_id: str
     user_id: str
@@ -162,6 +155,13 @@ def health():
 @app.get("/tools")
 def get_tools():
     """Get list of available tools for the AI agent"""
+    aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
+        StdioServerParameters(
+            command="uvx", 
+            args=["awslabs.aws-documentation-mcp-server@latest"]
+        )
+    ))
+
     with aws_documentation_mcp_client:
         aws_tools = aws_documentation_mcp_client.list_tools_sync()
         all_tools = aws_tools + [web_search, http_request, retrieve]
@@ -257,6 +257,13 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="No user_id provided")
 
     async def generate(session_id: str, user_id: str, query: str):
+        aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
+            StdioServerParameters(
+                command="uvx", 
+                args=["awslabs.aws-documentation-mcp-server@latest"]
+            )
+        ))
+        
         with aws_documentation_mcp_client:
             agent = build_agent_for_session(session_id, user_id, mcp_client=aws_documentation_mcp_client)
 
