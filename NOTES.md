@@ -25,6 +25,7 @@
 
 - [] Clean up stack resource names
 - [] BUG: The first request fails unless you wait a few seconds after loading the page
+  - Add retry button
 - [] Investigate Strands Observability
 
 - [] Add polling on UI to check when Bedrock KB sync is completed
@@ -56,6 +57,7 @@ RUN AWS BUILD LOCALLY (STREAMING SUPPORTED)
    cd backend/aws
    docker build -t fast-agent .
    docker run --rm --interactive --env-file .env -v //c/Users/eric/.aws:/root/.aws -p 8000:8000 fast-agent
+   docker run --rm --interactive --env-file .env -v //c/Users/eric.bach/.aws:/root/.aws -p 8000:8000 fast-agent
 
    cd frontend
    npm run dev

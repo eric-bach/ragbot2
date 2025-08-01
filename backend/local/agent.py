@@ -5,7 +5,7 @@ from strands import Agent
 from strands.models import BedrockModel
 from strands_tools import http_request, retrieve
 from strands.tools.mcp import MCPClient
-from strands.agent.conversation_manager import SummarizingConversationManager
+from strands.agent.conversation_manager import SummarizingConversationManager, SlidingWindowConversationManager
 from mcp import stdio_client, StdioServerParameters
 from tools.web_search import web_search
 
@@ -18,8 +18,9 @@ session = boto3.Session(region_name=AWS_REGION)
 
 # Create a Bedrock model with the custom session
 bedrock_model = BedrockModel(
-    #model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
-    model_id="amazon.nova-micro-v1:0",
+    #model_id="us.anthropic.claude-sonnet-4-20250514-v1:0", # Slow, but most accurate
+    model_id="amazon.nova-lite-v1:0", # Very fast, but not good enough for production
+    #model_id="amazon.nova-pro-v1:0", # Fast and fairly good
     boto_session=session
 )
 
@@ -45,9 +46,8 @@ aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
 
 def interactive_session():
     # create conversation manager
-    conversation_manager = SummarizingConversationManager(
-        summary_ratio=0.3,
-        preserve_recent_messages=10
+    conversation_manager = SlidingWindowConversationManager(
+        window_size=10
     )
 
     with aws_documentation_mcp_client:
@@ -68,7 +68,7 @@ def interactive_session():
             For questions asking about company policies, internal knowledge, procedures, or static information,
             check the knowledge base first.
             For questions about AWS, use the AWS documentation tool.
-            
+
             Your output MUST follow this format, using ONLY these tags:
                 - <thinking>: Reflect on your approach and reasoning.
                 - <response>: Only provide your human-readable answer here. Do NOT include any source links, 
@@ -76,7 +76,7 @@ def interactive_session():
                 - <sources>: List all sources used to answer the question (URLs, document IDs, markdown links, etc).
                 Place all source details ONLY here, and nowhere else.
             Do NOT use any other tags or formats.
-            
+
             Always separate each section (<thinking>, <response>, <sources>) cleanly.
             """,
             tools=tools,
