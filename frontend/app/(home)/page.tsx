@@ -13,6 +13,7 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
+  isStreaming?: boolean; // Add streaming status
 }
 
 export default function Home() {
@@ -94,9 +95,10 @@ export default function Home() {
     // Create assistant message immediately with thinking content to show loading state
     const assistantMessage: Message = {
       id: (Date.now() + 1).toString(),
-      content: '<thinking>Processing your request...</thinking>',
+      content: 'RAGBot 2 is cooking...',
       role: 'assistant',
       timestamp: new Date(),
+      isStreaming: true, // Mark as streaming initially
     };
 
     // Add the assistant message immediately to show thinking state
@@ -159,6 +161,8 @@ export default function Home() {
 
           if (done) {
             console.log('Streaming complete, total chunks:', chunkCount);
+            // Mark streaming as complete
+            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg)));
             break;
           }
 
@@ -169,7 +173,7 @@ export default function Home() {
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
-            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent } : msg)));
+            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent, isStreaming: true } : msg)));
           }
         }
       } else {
@@ -187,7 +191,7 @@ export default function Home() {
       }
 
       // Update the existing assistant message with error content
-      setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent } : msg)));
+      setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent, isStreaming: false } : msg)));
     } finally {
       setIsLoading(false);
     }
@@ -238,6 +242,11 @@ export default function Home() {
               }`}
             >
               {message.role === 'user' ? (
+                <div>
+                  <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
+                  <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
+                </div>
+              ) : message.isStreaming ? (
                 <div>
                   <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
                   <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
