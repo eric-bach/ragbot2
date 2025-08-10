@@ -22,16 +22,16 @@
 - [x] Update README and add architecture diagram
 - [x] BUG: Upload user documents under the user's id key in the S3 bucket
 - [x] Build estimate cost list
+- [x] BUG: The first request fails unless you wait a few seconds after loading the page
 
+- Test
+- [] Improve the feel of the responsiveness of responses after the message is submitted
 - [] Clean up stack resource names
 - [] Add checks to check env variables exist
-- [] BUG: The first request fails unless you wait a few seconds after loading the page
-  - Add retry button
 - [] Investigate Strands Observability
 
-- [] Add polling on UI to check when Bedrock KB sync is completed
 - [] Investigate adding Cognito auth to ALB
-- [] BUG: The tabs keep switching when RAGBot is thinking
+- [] Add polling on UI to check when Bedrock KB sync is completed
 - [] Move from ECS Fargate to Lambda Function URLs with auth in Lambda code
 - [] Switch frontend to connect to Lambda fURL to compare how streaming works with fUR
 
