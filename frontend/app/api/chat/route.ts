@@ -6,15 +6,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log('Request body:', body);
 
-    // Get the ALB DNS name from environment variable
-    const albDnsName = process.env.NEXT_PUBLIC_ALB_DNS_NAME;
-    console.log('ALB DNS Name:', albDnsName);
+    // Get the Backend URL from environment variable
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+    console.log('Backend URL:', BACKEND_URL);
 
-    if (!albDnsName) {
-      throw new Error('NEXT_PUBLIC_ALB_DNS_NAME environment variable is not set');
+    if (!BACKEND_URL) {
+      throw new Error('NEXT_PUBLIC_BACKEND_URL environment variable is not set');
     }
 
-    const backendUrl = `https://${albDnsName}/chat`;
+    const backendUrl = `https://${BACKEND_URL}/chat`;
     console.log('Making request to backend URL:', backendUrl);
 
     console.log('Making request to RAGBot API...');

@@ -39,6 +39,7 @@ class Ragbot2Stack(Stack):
         knowledge_base_data_source_id = os.getenv('KNOWLEDGE_BASE_DATA_SOURCE_ID', '')
         certificate_arn = os.getenv('CERTIFICATE_ARN', '')
         linkup_api_key = os.getenv('LINKUP_API_KEY', '')
+        APP_NAME = os.getenv('APP_NAME', 'ragbot2')
 
         # Add S3 bucket for Strands Agent sessions
         sessions_bucket = s3.Bucket(
@@ -237,8 +238,8 @@ class Ragbot2Stack(Stack):
         task_definition = ecs.FargateTaskDefinition(
             self, 
             "AgentTaskDefinition",
-            memory_limit_mib=512,
-            cpu=256,
+            memory_limit_mib=4096,
+            cpu=1024,
             execution_role=execution_role,
             task_role=task_role,
             runtime_platform=ecs.RuntimePlatform(
@@ -337,7 +338,7 @@ class Ragbot2Stack(Stack):
             vpc=vpc,
             internet_facing=True,
             security_group=alb_sg,
-            load_balancer_name="agent-alb",
+            load_balancer_name=f"{APP_NAME}-public",
         )
     
         certificate = acm.Certificate.from_certificate_arn(
@@ -350,7 +351,7 @@ class Ragbot2Stack(Stack):
         user_pool = cognito.UserPool(
             self,
             "AgentUserPool",
-            user_pool_name="ragbot-users",
+            user_pool_name="ragbot2-users",
             sign_in_aliases=cognito.SignInAliases(email=True),
             auto_verify=cognito.AutoVerifiedAttrs(email=True),
             self_sign_up_enabled=True,
@@ -374,29 +375,28 @@ class Ragbot2Stack(Stack):
             user_pool=user_pool
         )
 
-        alb_user_pool_client = cognito.UserPoolClient(
-            self,
-            "AgentUserPoolClient",
-            user_pool=user_pool,
-            generate_secret=True,  # Required for ALB integration
-            auth_flows=cognito.AuthFlow(user_password=True),
-            o_auth=cognito.OAuthSettings(
-                flows=cognito.OAuthFlows(authorization_code_grant=True),
-                scopes=[
-                    cognito.OAuthScope.OPENID, # Required for ALB integration
-                    cognito.OAuthScope.EMAIL # Optional
-                ],
-                #callback_urls=[f"https://{alb.load_balancer_dns_name}/oauth2/idpresponse"],
-                callback_urls=["https://ragbot2-alb.ericbach.dev/oauth2/idpresponse"],
-            ),
-        )
+        # alb_user_pool_client = cognito.UserPoolClient(
+        #     self,
+        #     "AgentUserPoolClient",
+        #     user_pool=user_pool,
+        #     generate_secret=True,  # Required for ALB integration
+        #     auth_flows=cognito.AuthFlow(user_password=True),
+        #     o_auth=cognito.OAuthSettings(
+        #         flows=cognito.OAuthFlows(authorization_code_grant=True),
+        #         scopes=[
+        #             cognito.OAuthScope.OPENID, # Required for ALB integration
+        #             cognito.OAuthScope.EMAIL # Optional
+        #         ],
+        #         callback_urls=[f"https://{APP_NAME}-public.ericbach.dev/oauth2/idpresponse"],
+        #     ),
+        # )
         
         user_pool_domain = cognito.UserPoolDomain(
             self,
             "AgentUserPoolDomain",
             user_pool=user_pool,
             cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix="ragbot2-alb"  # Must be globally unique
+                domain_prefix=f"{APP_NAME}"  # Must be globally unique
             ),
         )
 
@@ -497,21 +497,16 @@ class Ragbot2Stack(Stack):
         #     }
         # )
 
-        # Lookup the existing hosted zone
-        hosted_zone = route53.HostedZone.from_lookup(
+        # Since DNS is managed by Cloudflare, we don't create Route 53 records
+        # The ALB DNS name will be output for manual DNS configuration
+        
+        # Output the ALB DNS name for manual DNS configuration in Cloudflare
+        CfnOutput(
             self,
-            "HostedZone",
-            domain_name="ericbach.dev"
-        )
-
-        # Create an alias record pointing to the ALB
-        route53.ARecord(
-            self,
-            "ALBAliasRecord",
-            zone=hosted_zone,
-            record_name="ragbot2-alb",  # This creates ragbot-alb.ericbach.dev
-            target=route53.RecordTarget.from_alias(targets.LoadBalancerTarget(alb)),
-            comment="Alias record for RAGBot ALB"
+            "ALBDnsName",
+            value=alb.load_balancer_dns_name,
+            description="ALB DNS Name - Create CNAME record in Cloudflare: ragbot2-public.ericbach.dev -> this value",
+            export_name="Ragbot2ALBDnsName"
         )
 
         # Output the S3 bucket name
@@ -550,14 +545,14 @@ class Ragbot2Stack(Stack):
             export_name="Ragbot2CognitoReactAppClientId"
         )
 
-        # Output the ALB App Client ID
-        CfnOutput(
-            self,
-            "CognitoALBAppClientId",
-            value=alb_user_pool_client.user_pool_client_id,
-            description="Cognito ALB App Client ID",
-            export_name="Ragbot2CognitoALBAppClientId"
-        )
+        # # Output the ALB App Client ID
+        # CfnOutput(
+        #     self,
+        #     "CognitoALBAppClientId",
+        #     value=alb_user_pool_client.user_pool_client_id,
+        #     description="Cognito ALB App Client ID",
+        #     export_name="Ragbot2CognitoALBAppClientId"
+        # )
 
         # Output the Lambda function name
         CfnOutput(

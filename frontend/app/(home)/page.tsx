@@ -23,7 +23,7 @@ export default function Home() {
   const [sessionId, setSessionId] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { tools, loading: toolsLoading, error: toolsError } = useTools();
+  const { tools, loading: toolsLoading, error: toolsError, refreshTools } = useTools(userId);
 
   // Generate session ID on component mount
   useEffect(() => {
@@ -52,16 +52,19 @@ export default function Home() {
   }, [messages]);
 
   const clearChat = async () => {
-    if (sessionId) {
+    if (sessionId && userId) {
       try {
-        // Clear session on backend
-        const albDnsName = process.env.NEXT_PUBLIC_ALB_DNS_NAME;
-        if (albDnsName) {
-          const response = await fetch(`https://${albDnsName}/session/${userId}/${sessionId}`, {
-            method: 'DELETE',
-          });
+        // Clear session on backend through API route
+        const response = await fetch(`/api/session/${userId}/${sessionId}`, {
+          method: 'DELETE',
+        });
 
-          console.log('Session cleared:', response);
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Session cleared successfully:', result);
+        } else {
+          const errorData = await response.json();
+          console.error('Failed to clear session:', errorData);
         }
       } catch (error) {
         console.error('Failed to clear session on backend:', error);
@@ -162,7 +165,9 @@ export default function Home() {
           if (done) {
             console.log('Streaming complete, total chunks:', chunkCount);
             // Mark streaming as complete
-            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg)));
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg))
+            );
             break;
           }
 
@@ -173,7 +178,11 @@ export default function Home() {
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
-            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent, isStreaming: true } : msg)));
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent, isStreaming: true } : msg
+              )
+            );
           }
         }
       } else {
@@ -191,7 +200,11 @@ export default function Home() {
       }
 
       // Update the existing assistant message with error content
-      setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent, isStreaming: false } : msg)));
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id ? { ...msg, content: errorContent, isStreaming: false } : msg
+        )
+      );
     } finally {
       setIsLoading(false);
     }
@@ -228,7 +241,9 @@ export default function Home() {
               ) : (
                 <p className='text-sm mt-2'>Tools loaded: {tools.length} available</p>
               )}
-              {sessionId && <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId.substring(0, 8)}...</p>}
+              {sessionId && (
+                <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId.substring(0, 8)}...</p>
+              )}
               <p className='text-xs mt-1 text-muted-foreground'>Memory: Last 10 message pairs</p>
             </div>
           </div>
@@ -238,7 +253,9 @@ export default function Home() {
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
-                message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-muted-foreground'
+                message.role === 'user'
+                  ? 'bg-primary text-primary-foreground ml-auto'
+                  : 'bg-muted text-muted-foreground'
               }`}
             >
               {message.role === 'user' ? (
@@ -281,7 +298,7 @@ export default function Home() {
             <div className='flex items-center justify-between px-3 py-2'>
               <div className='flex items-center space-x-2'>
                 <UploadButton userId={userId} />
-                <ToolsButton tools={tools} loading={toolsLoading} error={toolsError} />
+                <ToolsButton tools={tools} loading={toolsLoading} error={toolsError} onRefresh={refreshTools} />
               </div>
               <div className='flex items-center space-x-2'>
                 {messages.length > 0 && (

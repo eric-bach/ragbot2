@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest, { params }: { params: { userId: string } }) {
   try {
+    const { userId } = params;
+
     // Get the Backend URL from environment variable
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
     if (!BACKEND_URL) {
@@ -12,7 +14,7 @@ export async function GET(request: NextRequest) {
     const protocol = BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1') ? 'http' : 'https';
     const backendUrl = `${protocol}://${BACKEND_URL}`;
 
-    const response = await fetch(`${backendUrl}/tools`, {
+    const response = await fetch(`${backendUrl}/tools/${userId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -21,16 +23,16 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Tools API error response:', errorText);
+      console.error('User Tools API error response:', errorText);
       throw new Error(`Backend responded with status: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error fetching tools:', error);
+    console.error('Error fetching user tools:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch tools', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to fetch user tools', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
