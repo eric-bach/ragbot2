@@ -3,12 +3,18 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function GET(request: NextRequest) {
   try {
     // Get the ALB DNS name from environment variable
-    const albDnsName = process.env.NEXT_PUBLIC_ALB_DNS_NAME;
-    if (!albDnsName) {
-      throw new Error('NEXT_PUBLIC_ALB_DNS_NAME environment variable is not set');
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+    if (!BACKEND_URL) {
+      throw new Error('NEXT_PUBLIC_BACKEND_URL environment variable is not set');
     }
 
-    const response = await fetch(`https://${albDnsName}/health`, {
+    // Determine the protocol and construct the URL
+    const protocol = BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1') ? 'http' : 'https';
+    const backendUrl = `${protocol}://${BACKEND_URL}`;
+
+    console.log('Making request to backend health check URL:', backendUrl);
+
+    const response = await fetch(`${backendUrl}/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -25,6 +31,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (error) {
     console.error('Error checking backend health:', error);
-    return NextResponse.json({ error: 'Failed to check backend health', details: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to check backend health', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
 }

@@ -23,9 +23,8 @@
 - [x] BUG: Upload user documents under the user's id key in the S3 bucket
 - [x] Build estimate cost list
 - [x] BUG: The first request fails unless you wait a few seconds after loading the page
+- [x] Improve the feel of the responsiveness of responses after the message is submitted
 
-- Test
-- [] Improve the feel of the responsiveness of responses after the message is submitted
 - [] Clean up stack resource names
 - [] Add checks to check env variables exist
 - [] Investigate Strands Observability
@@ -90,11 +89,23 @@ DEPLOY
 TESTS
 
 ```
-   curl -X GET https://ragbot2-alb.ericbach.dev/health
-   curl -X GET https://ragbot2-alb.ericbach.dev/tools
-   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?", "session_id": "1", "user_id": "1"}'
-   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?", "session_id": "1", "user_id": "1"}'
-   curl -X POST https://ragbot2-alb.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?", "session_id": "1", "user_id": "1"}'
+   curl -X GET https://ragbot2-public.ericbach.dev/health
+   curl -X GET https://ragbot2-public.ericbach.dev/tools
+   curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?", "session_id": "1", "user_id": "1"}'
+   curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?", "session_id": "1", "user_id": "1"}'
+   curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?", "session_id": "1", "user_id": "1"}'
+```
+
+##### Cloudflare
+
+Check what headers Cloudflare is returning
+
+```
+# Get the Cloudflare proxy IP addresses
+nslookup ragbot2-public.ericbach.dev 8.8.8.8
+
+# Check what headers Cloudflare is returning using one of the proxy IP addresses
+curl -v https://ragbot2-public.ericbach.dev/health --resolve ragbot2-public.ericbach.dev:443:172.67.210.169 2>&1 | grep -E "(CF-|X-|>|<)"
 ```
 
 ##### Questions

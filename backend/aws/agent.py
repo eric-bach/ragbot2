@@ -16,6 +16,9 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from models.mcp_config import MCPConfigRequest, MCPConfigResponse, UserMCPConfig, MCPServerConfig, MCPServerType
+from services.mcp_config_store import MCPConfigStore
+from services.mcp_client_manager import mcp_client_manager
 
 # Configure logging
 logging.basicConfig(
@@ -61,14 +64,21 @@ bedrock_model = BedrockModel(
     boto_session=session
 )
 
+# Initialize MCP config store
+mcp_config_store = MCPConfigStore(
+    bucket_name=SESSIONS_BUCKET_NAME,
+    region_name=AWS_REGION,
+    boto_session=session
+)
+
 class ChatRequest(BaseModel):
     session_id: str
     user_id: str
     query: str
 
-def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient) -> Agent:
+def build_agent_for_session(session_id: str, user_id: str, user_mcp_configs: list = None) -> Agent:
     """Builds and returns a Strands Agent to a persistent session in S3 
-    with conversation management"""
+    with conversation management and user-configured MCP servers"""
     session_manager = S3SessionManager(
         session_id=session_id,
         bucket=SESSIONS_BUCKET_NAME,
@@ -80,25 +90,47 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
         window_size=10
     )
     
-    tools = mcp_client.list_tools_sync() + [web_search, http_request, retrieve]
+    # Start with base tools
+    base_tools = [web_search, http_request, retrieve]
+    
+    # Create all MCP clients and collect tools
+    all_mcp_tools = []
+    active_clients = []
+    
+    # Add user-configured MCP servers if provided
+    if user_mcp_configs:
+        user_clients = mcp_client_manager.create_clients_from_config(user_mcp_configs)
+        active_clients.extend(user_clients)
+    
+    # Collect tools from all MCP clients
+    for client in active_clients:
+        try:
+            client.__enter__()
+            tools = client.list_tools_sync()
+            all_mcp_tools.extend(tools)
+        except Exception as e:
+            logger.error(f"Failed to get tools from MCP client: {str(e)}")
+    
+    # Combine all tools
+    all_tools = base_tools + all_mcp_tools
 
-    logger.debug("tools", tools)
+    logger.debug("tools", all_tools)
 
     return Agent(
         agent_id="ragbot2",
         system_prompt="""
-        You are an AI assistant that helps users answer any type of questions with three essential tools:
+        You are an AI assistant that helps users answer any type of questions with access to multiple tools:
             - Web search using LinkUp API (web_search)
-            - AWS documentation (MCP tools)
+            - User-configured MCP servers with custom capabilities
             - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)
             
         **Thinking:**
         - For EVERY user query, your default is to use the retrieve tool.
-        - If the user question is about a specific AWS service, use the AWS documentation tool.
+        - If the retrieve tool cannot find an answer, use any tools (if any) from the MCP servers next.
         - If the user question requires a real-time answer (e.g. weather, stock prices, news, anything that can
-        change minute-to-minute), use the web_search tool instead of the retrieve tool.
-        - If you are not sure, prefer retrieve unless the query clearly matches on of the special cases above.
-        - Only if the retrieve or AWS documentation tool cannot find the answer, use the web_search tool to find the answer.
+        change minute-to-minute), use the web_search tool.
+        - If you are not sure, prefer retrieve, then MCP tools.
+        - Only if the retrieve and MCP tools cannot find the answer, use the web_search tool to find the answer.
 
         **Instructions:**
         - For EVERY user query, you MUST call and use at least one tool.
@@ -127,7 +159,7 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
 
         Always follow this response structure and do NOT skip tool calls, otherwise your response is considered invalid.
         """,
-        tools=tools,
+        tools=all_tools,
         model=bedrock_model,
         session_manager=session_manager,
         conversation_manager=conversation_manager,
@@ -152,36 +184,223 @@ def health():
 @app.get("/tools")
 def get_tools():
     """Get list of available tools for the AI agent"""
-    aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
-        StdioServerParameters(
-            command="uvx", 
-            args=["awslabs.aws-documentation-mcp-server@latest"]
-        )
-    ))
+    all_tools = [web_search, http_request, retrieve]
+    
+    tools_info = []
+    for tool in all_tools:
+        try:
+            # Use your improved logic for getting tool names
+            if hasattr(tool, 'tool_name'):
+                tool_name = tool.tool_name
+            else:
+                tool_name = getattr(tool, '__name__', str(tool))
+            
+            tools_info.append({"name": tool_name})
+        except Exception as e:
+            logger.warning(f"Could not process tool {tool}: {e}")
+            # Add a fallback entry
+            tools_info.append({"name": f"Tool_{len(tools_info)}"})
+    
+    return {
+        "tools": tools_info,
+        "total_count": len(tools_info)
+    }
 
-    with aws_documentation_mcp_client:
-        aws_tools = aws_documentation_mcp_client.list_tools_sync()
-        all_tools = aws_tools + [web_search, http_request, retrieve]
+@app.get("/tools/{user_id}")
+async def get_user_tools(user_id: str):
+    """Get list of all available tools including user-configured MCP tools"""
+    try:
+        # Get user's MCP configuration
+        user_config = await mcp_config_store.get_user_config(user_id)
+        user_mcp_configs = user_config.servers if user_config else []
         
+        # Start with base tools
+        base_tools = [web_search, http_request, retrieve]
         tools_info = []
-        for tool in all_tools:
+        
+        # Add base tools
+        for tool in base_tools:
             try:
-                # Use your improved logic for getting tool names
                 if hasattr(tool, 'tool_name'):
                     tool_name = tool.tool_name
                 else:
                     tool_name = getattr(tool, '__name__', str(tool))
                 
-                tools_info.append({"name": tool_name})
+                description = getattr(tool, 'description', None) or getattr(tool, '__doc__', None)
+                if description:
+                    description = description.strip().split('\n')[0]  # First line only
+                
+                tools_info.append({
+                    "name": tool_name,
+                    "description": description,
+                    "source": "base"
+                })
             except Exception as e:
-                logger.warning(f"Could not process tool {tool}: {e}")
-                # Add a fallback entry
-                tools_info.append({"name": f"Tool_{len(tools_info)}"})
+                logger.warning(f"Could not process base tool {tool}: {e}")
+        
+        # Add user-configured MCP server tools
+        if user_mcp_configs:
+            try:
+                user_clients = mcp_client_manager.create_clients_from_config(user_mcp_configs)
+                for i, client in enumerate(user_clients):
+                    try:
+                        client.__enter__()
+                        user_tools = client.list_tools_sync()
+                        logger.info(f"Retrieved {len(user_tools)} tools from MCP client")
+                        server_name = user_mcp_configs[i].name if i < len(user_mcp_configs) else f"MCP Server {i+1}"
+                        
+                        for tool in user_tools:
+                            try:
+                                # Debug logging to understand tool structure
+                                logger.info(f"Processing MCP tool: {tool}")
+                                logger.info(f"Tool type: {type(tool)}")
+                                logger.info(f"Tool attributes: {[attr for attr in dir(tool) if not attr.startswith('_')]}")
+                                
+                                # Try multiple ways to get the tool name
+                                tool_name = None
+                                if hasattr(tool, 'name'):
+                                    tool_name = tool.name
+                                elif hasattr(tool, 'tool_name'):
+                                    tool_name = tool.tool_name
+                                elif hasattr(tool, '_name'):
+                                    tool_name = tool._name
+                                elif hasattr(tool, '__name__'):
+                                    tool_name = tool.__name__
+                                elif hasattr(tool, 'function_name'):
+                                    tool_name = tool.function_name
+                                elif hasattr(tool, 'schema') and hasattr(tool.schema, 'name'):
+                                    tool_name = tool.schema.name
+                                else:
+                                    # If all else fails, try to get it from the tool's attributes
+                                    tool_name = f"Tool_{len(tools_info)}"
+                                
+                                # Try multiple ways to get the description
+                                description = None
+                                if hasattr(tool, 'description'):
+                                    description = tool.description
+                                elif hasattr(tool, '__doc__'):
+                                    description = tool.__doc__
+                                elif hasattr(tool, '_description'):
+                                    description = tool._description
+                                elif hasattr(tool, 'schema') and hasattr(tool.schema, 'description'):
+                                    description = tool.schema.description
+                                
+                                if description:
+                                    description = str(description).strip().split('\n')[0]  # First line only
+                                
+                                tools_info.append({
+                                    "name": tool_name,
+                                    "description": description,
+                                    "source": server_name
+                                })
+                            except Exception as e:
+                                logger.warning(f"Could not process user MCP tool {tool}: {e}")
+                                # Add a fallback entry with basic info
+                                tools_info.append({
+                                    "name": f"Unknown Tool {len(tools_info)}",
+                                    "description": f"Tool from {server_name}",
+                                    "source": server_name
+                                })
+                    except Exception as e:
+                        logger.error(f"Failed to get tools from user MCP client: {str(e)}")
+                    finally:
+                        try:
+                            client.__exit__(None, None, None)
+                        except:
+                            pass
+            except Exception as e:
+                logger.error(f"Failed to create user MCP clients: {str(e)}")
         
         return {
             "tools": tools_info,
             "total_count": len(tools_info)
         }
+        
+    except Exception as e:
+        logger.error(f"Error getting tools for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving tools: {str(e)}")
+
+@app.get("/mcp-config/{user_id}")
+async def get_mcp_config(user_id: str):
+    """Get user's MCP server configuration"""
+    try:
+        config = await mcp_config_store.get_user_config(user_id)
+        if config:
+            return MCPConfigResponse(
+                success=True,
+                message="Configuration retrieved successfully",
+                servers=config.servers
+            )
+        else:
+            return MCPConfigResponse(
+                success=True,
+                message="No configuration found",
+                servers=[]
+            )
+    except Exception as e:
+        logger.error(f"Error getting MCP config for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving configuration: {str(e)}")
+
+@app.post("/mcp-config/{user_id}")
+async def save_mcp_config(user_id: str, request: MCPConfigRequest):
+    """Save user's MCP server configuration"""
+    try:
+        user_config = UserMCPConfig(user_id=user_id, servers=request.servers)
+        success = await mcp_config_store.save_user_config(user_id, user_config)
+        
+        if success:
+            return MCPConfigResponse(
+                success=True,
+                message="Configuration saved successfully",
+                servers=request.servers
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
+            
+    except Exception as e:
+        logger.error(f"Error saving MCP config for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error saving configuration: {str(e)}")
+
+@app.delete("/mcp-config/{user_id}")
+async def delete_mcp_config(user_id: str):
+    """Delete user's MCP server configuration"""
+    try:
+        success = await mcp_config_store.delete_user_config(user_id)
+        
+        if success:
+            return MCPConfigResponse(
+                success=True,
+                message="Configuration deleted successfully"
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete configuration")
+            
+    except Exception as e:
+        logger.error(f"Error deleting MCP config for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting configuration: {str(e)}")
+
+@app.get("/mcp-server-types")
+def get_mcp_server_types():
+    """Get available MCP server types"""
+    return {
+        "server_types": [
+            {
+                "value": MCPServerType.STDIO,
+                "label": "Standard Input/Output",
+                "description": "Servers that communicate via stdin/stdout"
+            },
+            {
+                "value": MCPServerType.SSE,
+                "label": "Server-Sent Events",
+                "description": "Servers that communicate via HTTP SSE (coming soon)"
+            },
+            {
+                "value": MCPServerType.WEBSOCKET,
+                "label": "WebSocket",
+                "description": "Servers that communicate via WebSocket (coming soon)"
+            }
+        ]
+    }
 
 @app.get("/presigned-url")
 def generate_presigned_url(user_id: str = Query(..., description="User ID"), file_name: str = Query(..., description="Name of the file to upload")):
@@ -254,15 +473,13 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="No user_id provided")
 
     async def generate(session_id: str, user_id: str, query: str):
-        aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
-            StdioServerParameters(
-                command="uvx", 
-                args=["awslabs.aws-documentation-mcp-server@latest"]
-            )
-        ))
-        
-        with aws_documentation_mcp_client:
-            agent = build_agent_for_session(session_id, user_id, mcp_client=aws_documentation_mcp_client)
+        try:
+            # Get user's MCP configuration
+            user_config = await mcp_config_store.get_user_config(user_id)
+            user_mcp_configs = user_config.servers if user_config else []
+            
+            # Build agent with user's MCP configurations
+            agent = build_agent_for_session(session_id, user_id, user_mcp_configs)
 
             try:
                 agent_stream = agent.stream_async(query)
@@ -279,6 +496,10 @@ async def chat(request: ChatRequest):
             except Exception as e:
                 logger.error(f"Error in agent stream: {str(e)}")
                 yield f"Error: {str(e)}"
+                
+        except Exception as e:
+            logger.error(f"Error setting up agent: {str(e)}")
+            yield f"Error setting up agent: {str(e)}"
 
     logger.info(f"Chat request received: session_id={request.session_id}, query={request.query}, user_id={request.user_id}")
 
