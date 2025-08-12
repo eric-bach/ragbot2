@@ -25,7 +25,7 @@
 - [x] BUG: The first request fails unless you wait a few seconds after loading the page
 - [x] Improve the feel of the responsiveness of responses after the message is submitted
 
-- [] Improve the response message bubbles to be more like Perplexity responses
+- [] Improve the response message bubbles to be more like Perplexity responses.
 
 - [] Clean up stack resource names
 - [] Add checks to check env variables exist
