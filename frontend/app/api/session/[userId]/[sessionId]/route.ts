@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function DELETE(request: NextRequest, { params }: { params: { userId: string; sessionId: string } }) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ userId: string; sessionId: string }> }
+) {
   try {
-    const { userId, sessionId } = params;
+    const { userId, sessionId } = await params;
 
     console.log('API route called to delete session:', { userId, sessionId });
 
@@ -14,7 +17,9 @@ export async function DELETE(request: NextRequest, { params }: { params: { userI
       throw new Error('NEXT_PUBLIC_BACKEND_URL environment variable is not set');
     }
 
-    const backendUrl = `https://${BACKEND_URL}/session/${userId}/${sessionId}`;
+    // Determine the protocol and construct the URL
+    const protocol = BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1') ? 'http' : 'https';
+    const backendUrl = `${protocol}://${BACKEND_URL}/session/${userId}/${sessionId}`;
     console.log('Making request to backend URL:', backendUrl);
 
     const response = await fetch(backendUrl, {
