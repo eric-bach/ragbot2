@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Save, X, Settings, Wrench, RefreshCw } from 'lucide-react';
 
 interface MCPServerConfig {
@@ -36,13 +36,7 @@ export default function MCPConfigModal({ userId, isOpen, onClose }: MCPConfigMod
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen && userId) {
-      loadConfigs();
-    }
-  }, [isOpen, userId]);
-
-  const loadConfigs = async () => {
+  const loadConfigs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -68,7 +62,13 @@ export default function MCPConfigModal({ userId, isOpen, onClose }: MCPConfigMod
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    if (isOpen && userId) {
+      loadConfigs();
+    }
+  }, [isOpen, userId, loadConfigs]);
 
   const loadTools = async () => {
     setLoadingTools(true);
@@ -142,7 +142,7 @@ export default function MCPConfigModal({ userId, isOpen, onClose }: MCPConfigMod
     setEnvVarsInput({ ...envVarsInput, [newIndex]: '' });
   };
 
-  const updateConfig = (index: number, field: string, value: any) => {
+  const updateConfig = (index: number, field: string, value: string | boolean | string[] | Record<string, string>) => {
     const updatedConfigs = [...configs];
     updatedConfigs[index] = { ...updatedConfigs[index], [field]: value };
     setConfigs(updatedConfigs);

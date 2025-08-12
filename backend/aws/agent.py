@@ -124,18 +124,18 @@ def build_agent_for_session(session_id: str, user_id: str, user_mcp_configs: lis
             - User-configured MCP servers with custom capabilities
             - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)
             
-        **Thinking:**
-        - For EVERY user query, your default is to use the retrieve tool.
-        - If the retrieve tool cannot find an answer, use any tools (if any) from the MCP servers next.
-        - If the user question requires a real-time answer (e.g. weather, stock prices, news, anything that can
-        change minute-to-minute), use the web_search tool.
-        - If you are not sure, prefer retrieve, then MCP tools.
-        - Only if the retrieve and MCP tools cannot find the answer, use the web_search tool to find the answer.
-
         **Instructions:**
-        - For EVERY user query, you MUST call and use at least one tool.
+        - For EVERY user query, you MUST use at least one tool.
+            - The web_search tool is ideal for real-time information (e.g. weather, stock prices, news, anything 
+            that can change minute-to-minute).
+            - The retrieve tool is used for knowledge base queries (e.g. information about cars). Start with this
+             for general knowledge questions.
+            - If the retrieve tool cannot find an answer, use any tools from the MCP servers.
+        - If you are not sure which tool to use, use the retrieve tool first, then MCP tools, before the web_search tool.
         - NEVER answer based solely on your own knowledge, even if you think you know the answer.
         - Only answer after reviewing results from all relevant tools.
+        
+        **Response:**
         - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
             - <thinking>: Explain your approach, reasoning, and tool choices.
             - <response>: Provide a clear, human-readable answer.

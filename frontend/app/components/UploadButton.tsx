@@ -8,9 +8,7 @@ type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 export default function UploadButton({ userId }: { userId: string }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [currentFileKey, setCurrentFileKey] = useState<string | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cleanup polling on unmount
@@ -22,7 +20,7 @@ export default function UploadButton({ userId }: { userId: string }) {
     };
   }, []);
 
-  const startProcessing = (fileKey: string) => {
+  const startProcessing = () => {
     // Clear any existing polling
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -36,8 +34,6 @@ export default function UploadButton({ userId }: { userId: string }) {
       // Reset after showing success for 3 seconds
       setTimeout(() => {
         setUploadStatus('idle');
-        setSelectedFile(null);
-        setCurrentFileKey(null);
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
@@ -66,7 +62,6 @@ export default function UploadButton({ userId }: { userId: string }) {
         return;
       }
 
-      setSelectedFile(file);
       setErrorMessage('');
       console.log('Selected file:', file.name);
 
@@ -82,7 +77,9 @@ export default function UploadButton({ userId }: { userId: string }) {
     try {
       // Step 1: Get presigned URL
       console.log('Getting presigned URL for:', file.name);
-      const presignedResponse = await fetch(`/api/presigned-url?user_id=${encodeURIComponent(userId)}&file_name=${encodeURIComponent(file.name)}`);
+      const presignedResponse = await fetch(
+        `/api/presigned-url?user_id=${encodeURIComponent(userId)}&file_name=${encodeURIComponent(file.name)}`
+      );
 
       if (!presignedResponse.ok) {
         const errorData = await presignedResponse.json();
@@ -110,8 +107,7 @@ export default function UploadButton({ userId }: { userId: string }) {
 
       // Step 3: Set to processing state and start processing
       setUploadStatus('processing');
-      setCurrentFileKey(presignedData.key);
-      startProcessing(presignedData.key);
+      startProcessing();
     } catch (error) {
       console.error('Upload error:', error);
       setErrorMessage(error instanceof Error ? error.message : 'Upload failed');
@@ -121,7 +117,6 @@ export default function UploadButton({ userId }: { userId: string }) {
       setTimeout(() => {
         setUploadStatus('idle');
         setErrorMessage('');
-        setCurrentFileKey(null);
       }, 5000);
     }
   };
@@ -196,7 +191,9 @@ export default function UploadButton({ userId }: { userId: string }) {
       </button>
 
       {errorMessage && (
-        <div className='absolute top-full left-0 mt-1 px-2 py-1 text-xs bg-red-100 text-red-700 rounded shadow-lg z-10 max-w-xs'>{errorMessage}</div>
+        <div className='absolute top-full left-0 mt-1 px-2 py-1 text-xs bg-red-100 text-red-700 rounded shadow-lg z-10 max-w-xs'>
+          {errorMessage}
+        </div>
       )}
 
       <input ref={fileInputRef} type='file' onChange={handleFileChange} className='hidden' accept='.pdf' />

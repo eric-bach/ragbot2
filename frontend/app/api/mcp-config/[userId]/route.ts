@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest, { params }: { params: { userId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
 
     // Get the ALB DNS name from environment variable
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -42,9 +42,9 @@ export async function GET(request: NextRequest, { params }: { params: { userId: 
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { userId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
     const body = await request.json();
 
     // Get the ALB DNS name from environment variable
@@ -86,9 +86,9 @@ export async function POST(request: NextRequest, { params }: { params: { userId:
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { userId: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
 
     // Get the ALB DNS name from environment variable
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;

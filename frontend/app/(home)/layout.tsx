@@ -2,11 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Authenticator,
   Button,
   Heading,
-  Image,
   Theme,
   ThemeProvider,
   useAuthenticator,
@@ -39,7 +39,7 @@ function ChatLayout({ children, signOut, user }: ChatLayoutProps) {
         <div className='max-w-4xl mx-auto flex items-center justify-between'>
           <Link href='/' className='href'>
             <div className='flex items-center space-x-3'>
-              <img src='/logo.png' alt='RAGBot Logo' className='w-8 h-8' />
+              <Image src='/logo.png' alt='RAGBot Logo' className='w-8 h-8' width={32} height={32} />
               <h1 className='text-xl font-semibold'>RAGBot 2</h1>
             </div>
           </Link>
