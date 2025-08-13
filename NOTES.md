@@ -65,6 +65,7 @@ TESTS
 
 ```
    curl -X GET http://localhost:8000/health
+   curl -X GET http://localhost:8000/tools
    curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the recommended tire pressure of a 07 Camry?", "session_id": "1", "user_id": "1"}'
    curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is AWS Lambda?", "session_id": "1", "user_id": "1"}'
    curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Seattle?", "session_id": "1", "user_id": "1"}'

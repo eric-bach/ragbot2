@@ -163,13 +163,24 @@ def get_tools():
         )
     ))
 
-    strands_tools = [web_search, http_request, retrieve]
+    base_tools = [web_search, http_request, retrieve]
     tools_info = []
 
-    for tool in strands_tools:
+    for tool in base_tools:
         try:
-            tool_name = tool.tool_name
+            # For custom tools (web_search)
+            if hasattr(tool, 'tool_name'):
+                tool_name = tool.tool_name
+            # For strands tools (http_request, retrieve)
+            elif hasattr(tool, '__name__'):
+                tool_name = tool.__name__
+            else:
+                tool_name = str(tool)
+            
             description = getattr(tool, 'description', None)
+            if not description and hasattr(tool, '__doc__'):
+                description = tool.__doc__
+            
             if description:
                 description = description.strip().split('\n')[0]  # First line only
 
