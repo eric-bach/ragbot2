@@ -8,8 +8,5 @@
     "us-east-1e",
     "us-east-1f"
   ],
-  "hosted-zone:account=115499684434:domainName=ericbach.dev:region=us-east-1": {
-    "Id": "/hostedzone/Z01617942SCNK83HTZN3T",
-    "Name": "ericbach.dev."
-  }
+  "availability-zones:account=761018860881:region=us-west-2": ["us-west-2a", "us-west-2b", "us-west-2c", "us-west-2d"]
 }
