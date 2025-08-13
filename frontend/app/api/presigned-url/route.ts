@@ -20,14 +20,17 @@ export async function GET(request: NextRequest) {
     console.log('File name:', fileName);
 
     // Get the ALB DNS name from environment variable
-    const albDnsName = process.env.NEXT_PUBLIC_ALB_DNS_NAME;
-    console.log('ALB DNS Name:', albDnsName);
-
-    if (!albDnsName) {
-      throw new Error('NEXT_PUBLIC_ALB_DNS_NAME environment variable is not set');
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+    if (!BACKEND_URL) {
+      throw new Error('NEXT_PUBLIC_BACKEND_URL environment variable is not set');
     }
 
-    const backendUrl = `https://${albDnsName}/presigned-url?user_id=${encodeURIComponent(userId)}&file_name=${encodeURIComponent(fileName)}`;
+    // Determine the protocol and construct the URL
+    const protocol = BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1') ? 'http' : 'https';
+
+    const backendUrl = `${protocol}://${BACKEND_URL}/presigned-url?user_id=${encodeURIComponent(
+      userId
+    )}&file_name=${encodeURIComponent(fileName)}`;
     console.log('Making request to backend URL:', backendUrl);
 
     const controller = new AbortController();
@@ -68,7 +71,10 @@ export async function GET(request: NextRequest) {
         errorMessage += ` - ${errorText}`;
       }
 
-      return NextResponse.json({ error: errorMessage, details: errorText, type: errorType }, { status: response.status });
+      return NextResponse.json(
+        { error: errorMessage, details: errorText, type: errorType },
+        { status: response.status }
+      );
     }
 
     const data = await response.json();

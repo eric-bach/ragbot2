@@ -5,6 +5,8 @@ import { Wrench } from 'lucide-react';
 
 interface Tool {
   name: string;
+  description?: string;
+  source?: string;
 }
 
 interface ToolsButtonProps {
@@ -47,13 +49,13 @@ export default function ToolsButton({ tools, loading, error }: ToolsButtonProps)
       </button>
 
       {isOpen && (
-        <div className='absolute bottom-full left-0 mb-2 w-80 bg-background border border-border rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto'>
+        <div className='absolute bottom-full left-0 mb-2 w-96 bg-background border border-border rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto'>
           <div className='p-3 border-b border-border'>
             <h3 className='font-semibold text-sm'>
               {loading ? 'Loading Tools...' : error ? 'Tools Error' : `Available Tools (${tools.length})`}
             </h3>
           </div>
-          <div className='p-3 space-y-4'>
+          <div className='p-3 space-y-3'>
             {loading && (
               <div className='flex items-center justify-center py-4'>
                 <div className='animate-spin rounded-full h-4 w-4 border-b-2 border-current'></div>
@@ -71,8 +73,22 @@ export default function ToolsButton({ tools, loading, error }: ToolsButtonProps)
             {!loading &&
               !error &&
               allTools.map((tool) => (
-                <div key={tool.name} className='text-sm'>
-                  <div className='text-foreground'>{tool.name}</div>
+                <div key={tool.name} className='text-sm border-b border-border last:border-b-0 pb-3 last:pb-0'>
+                  <div className='flex items-center justify-between mb-1'>
+                    <div className='font-medium text-foreground'>{tool.name}</div>
+                    {tool.source && (
+                      <span
+                        className={`text-xs px-2 py-1 rounded-full ${
+                          tool.source === 'aws'
+                            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                        }`}
+                      >
+                        {tool.source}
+                      </span>
+                    )}
+                  </div>
+                  {tool.description && <div className='text-xs text-muted-foreground'>{tool.description}</div>}
                 </div>
               ))}
           </div>

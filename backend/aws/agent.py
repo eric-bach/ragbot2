@@ -93,24 +93,24 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
             - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)
             
         **Thinking:**
-        - For EVERY user query, your default is to use the retrieve tool.
-        - If the user question is about a specific AWS service, use the AWS documentation tool.
-        - If the user question requires a real-time answer (e.g. weather, stock prices, news, anything that can
-        change minute-to-minute), use the web_search tool instead of the retrieve tool.
-        - If you are not sure, prefer retrieve unless the query clearly matches on of the special cases above.
-        - Only if the retrieve or AWS documentation tool cannot find the answer, use the web_search tool to find the answer.
+            - For EVERY user query, your default is to use the retrieve tool.
+            - If the user question is about a specific AWS service, use the AWS documentation tool.
+            - If the user question requires a real-time answer (e.g. weather, stock prices, news, anything that can
+            change minute-to-minute), use the web_search tool instead of the retrieve tool.
+            - If you are not sure, prefer retrieve unless the query clearly matches on of the special cases above.
+            - Only if the retrieve or AWS documentation tool cannot find the answer, use the web_search tool to find the answer.
 
         **Instructions:**
-        - For EVERY user query, you MUST call and use at least one tool.
-        - NEVER answer based solely on your own knowledge, even if you think you know the answer.
-        - Only answer after reviewing results from all relevant tools.
-        - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
-            - <thinking>: Explain your approach, reasoning, and tool choices.
-            - <response>: Provide a clear, human-readable answer.
-            - <sources>: List ALL tool outputs and/or sources used.
-        - Do NOT output anything except these three tags.
-        - Respond in a friendly, Albertan tone.
-        
+            - For EVERY user query, you MUST call and use at least one tool.
+            - NEVER answer based solely on your own knowledge, even if you think you know the answer.
+            - Only answer after reviewing results from all relevant tools.
+            - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
+                - <thinking>: Explain your approach, reasoning, and tool choices.
+                - <response>: Provide a clear, human-readable answer.
+                - <sources>: List ALL tool outputs and/or sources used.
+            - Do NOT output anything except these three tags.
+            - Respond in a friendly, Albertan tone.
+            
         **Example valid output:**
         <thinking>
         I used both web_search and retrieve because the user asked about current events and general knowledge.
@@ -155,33 +155,55 @@ def get_tools():
     aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
         StdioServerParameters(
             command="uvx", 
-            args=["awslabs.aws-documentation-mcp-server@latest"]
+            args=["awslabs.aws-documentation-mcp-server@latest"],
+            env={
+                "FASTMCP_LOG_LEVEL": "ERROR",
+                "AWS_DOCUMENTATION_PARTITION": "aws"
+            }
         )
     ))
 
-    with aws_documentation_mcp_client:
+    strands_tools = [web_search, http_request, retrieve]
+    tools_info = []
+
+    for tool in strands_tools:
+        try:
+            tool_name = tool.tool_name
+            description = getattr(tool, 'description', None)
+            if description:
+                description = description.strip().split('\n')[0]  # First line only
+
+            tools_info.append({
+                "name": tool_name,
+                "description": description,
+                "source": "base"
+            })
+        except Exception as e:
+            logger.warning(f"Could not process strands tool {tool}: {e}")
+
+    # Add aws_tools
+    with aws_documentation_mcp_client:  
         aws_tools = aws_documentation_mcp_client.list_tools_sync()
-        all_tools = aws_tools + [web_search, http_request, retrieve]
         
-        tools_info = []
-        for tool in all_tools:
+        for tool in aws_tools:
             try:
-                # Use your improved logic for getting tool names
-                if hasattr(tool, 'tool_name'):
-                    tool_name = tool.tool_name
-                else:
-                    tool_name = getattr(tool, '__name__', str(tool))
-                
-                tools_info.append({"name": tool_name})
+                # Get the tool name, description, and source
+                tool_name = tool.tool_name
+                description = tool.tool_spec["description"].strip().split('\n')[0]
+                source = "aws"
+
+                tools_info.append({
+                    "name": tool_name,
+                    "description": description,
+                    "source": source
+                })
             except Exception as e:
-                logger.warning(f"Could not process tool {tool}: {e}")
-                # Add a fallback entry
-                tools_info.append({"name": f"Tool_{len(tools_info)}"})
-        
-        return {
-            "tools": tools_info,
-            "total_count": len(tools_info)
-        }
+                logger.warning(f"Could not process AWS tool {tool}: {e}")
+
+    return {
+        "tools": tools_info,
+        "total_count": len(tools_info)
+    }
 
 @app.get("/presigned-url")
 def generate_presigned_url(user_id: str = Query(..., description="User ID"), file_name: str = Query(..., description="Name of the file to upload")):
@@ -257,7 +279,11 @@ async def chat(request: ChatRequest):
         aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
             StdioServerParameters(
                 command="uvx", 
-                args=["awslabs.aws-documentation-mcp-server@latest"]
+                args=["awslabs.aws-documentation-mcp-server@latest"],
+                env={
+                    "FASTMCP_LOG_LEVEL": "ERROR",
+                    "AWS_DOCUMENTATION_PARTITION": "aws"
+                }
             )
         ))
         

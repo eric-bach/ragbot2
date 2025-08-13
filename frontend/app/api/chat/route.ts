@@ -7,17 +7,17 @@ export async function POST(request: NextRequest) {
     console.log('Request body:', body);
 
     // Get the ALB DNS name from environment variable
-    const albDnsName = process.env.NEXT_PUBLIC_ALB_DNS_NAME;
-    console.log('ALB DNS Name:', albDnsName);
-
-    if (!albDnsName) {
-      throw new Error('NEXT_PUBLIC_ALB_DNS_NAME environment variable is not set');
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+    if (!BACKEND_URL) {
+      throw new Error('NEXT_PUBLIC_BACKEND_URL environment variable is not set');
     }
 
-    const backendUrl = `https://${albDnsName}/chat`;
+    // Determine the protocol and construct the URL
+    const protocol = BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1') ? 'http' : 'https';
+    const backendUrl = `${protocol}://${BACKEND_URL}/chat`;
+
     console.log('Making request to backend URL:', backendUrl);
 
-    console.log('Making request to RAGBot API...');
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       console.log('Request timed out after 30 seconds');

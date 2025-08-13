@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
+import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ThumbsUp, ThumbsDown, Copy } from 'lucide-react';
@@ -207,11 +208,13 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
               <div className='text-muted-foreground text-sm'>
                 {tab.id === 'answer' && !hasResponseContent && isStreaming ? (
                   <div className='flex items-center space-x-2 text-sm text-muted-foreground'>
-                    <img
+                    <Image
                       src='/logo.png'
                       alt='RAGBot Logo'
                       className='w-4 h-4 animate-bounce'
                       style={{ animationDelay: '-0.3s' }}
+                      width={6}
+                      height={6}
                     />
                     <AnimatedLogo text='RAGBot 2' isAnimating={true} size='sm' />
                     <span>is cooking...</span>
