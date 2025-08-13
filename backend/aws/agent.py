@@ -77,8 +77,7 @@ class ChatRequest(BaseModel):
     query: str
 
 def build_agent_for_session(session_id: str, user_id: str, user_mcp_configs: list = None) -> Agent:
-    """Builds and returns a Strands Agent to a persistent session in S3 
-    with conversation management and user-configured MCP servers"""
+    """Builds and returns a Strands Agent with conversation management and user-configured MCP servers"""
     session_manager = S3SessionManager(
         session_id=session_id,
         bucket=SESSIONS_BUCKET_NAME,
@@ -95,21 +94,25 @@ def build_agent_for_session(session_id: str, user_id: str, user_mcp_configs: lis
     
     # Create all MCP clients and collect tools
     all_mcp_tools = []
-    active_clients = []
     
     # Add user-configured MCP servers if provided
     if user_mcp_configs:
-        user_clients = mcp_client_manager.create_clients_from_config(user_mcp_configs)
-        active_clients.extend(user_clients)
-    
-    # Collect tools from all MCP clients
-    for client in active_clients:
         try:
-            client.__enter__()
-            tools = client.list_tools_sync()
-            all_mcp_tools.extend(tools)
+            user_clients = mcp_client_manager.create_clients_from_config(user_mcp_configs)
+            
+            # Collect tools from all MCP clients with proper cleanup
+            for client in user_clients:
+                try:
+                    # Use context manager for proper resource management
+                    with client:
+                        tools = client.list_tools_sync()
+                        all_mcp_tools.extend(tools)
+                        logger.info(f"Retrieved {len(tools)} tools from MCP client")
+                except Exception as e:
+                    logger.error(f"Failed to get tools from MCP client: {str(e)}")
+                    
         except Exception as e:
-            logger.error(f"Failed to get tools from MCP client: {str(e)}")
+            logger.error(f"Failed to setup MCP clients: {str(e)}")
     
     # Combine all tools
     all_tools = base_tools + all_mcp_tools
@@ -118,30 +121,27 @@ def build_agent_for_session(session_id: str, user_id: str, user_mcp_configs: lis
 
     return Agent(
         agent_id="ragbot2",
-        system_prompt="""
-        You are an AI assistant that helps users answer any type of questions with access to multiple tools:
+        system_prompt="""You are an AI assistant that helps users answer any type of questions with access to multiple tools: 
             - Web search using LinkUp API (web_search)
-            - User-configured MCP servers with custom capabilities
+            - AWS documentation (MCP tools)
             - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)
-            
+
         **Instructions:**
-        - For EVERY user query, you MUST use at least one tool.
-            - The web_search tool is ideal for real-time information (e.g. weather, stock prices, news, anything 
-            that can change minute-to-minute).
-            - The retrieve tool is used for knowledge base queries (e.g. information about cars). Start with this
-             for general knowledge questions.
-            - If the retrieve tool cannot find an answer, use any tools from the MCP servers.
-        - If you are not sure which tool to use, use the retrieve tool first, then MCP tools, before the web_search tool.
-        - NEVER answer based solely on your own knowledge, even if you think you know the answer.
-        - Only answer after reviewing results from all relevant tools.
-        
+            - For EVERY user query, you MUST use at least one tool.
+                - The AWS Documentation MCP server is used for queries about AWS services.
+                - The retrieve tool is used for knowledge base queries about cars.
+                - The web_search tool is ideal for real-time information (e.g. weather, stock prices, news, anything that can change minute-to-minute).
+            - If you are not sure which tool to use, use the retrieve tool first, then MCP tools, before the web_search tool.
+            - NEVER answer based solely on your own knowledge, even if you think you know the answer.
+            - Only answer after reviewing results from all relevant tools.
+
         **Response:**
-        - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
-            - <thinking>: Explain your approach, reasoning, and tool choices.
-            - <response>: Provide a clear, human-readable answer.
-            - <sources>: List ALL tool outputs and/or sources used.
-        - Do NOT output anything except these three tags.
-        - Respond in a friendly, Albertan tone.
+            - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
+                - <thinking>: Explain your approach, reasoning, and tool choices.
+                - <response>: Provide a clear, human-readable answer.
+                - <sources>: List ALL tool outputs and/or sources used.
+            - Do NOT output anything except these three tags.
+            - Respond in a friendly, Albertan tone.
         
         **Example valid output:**
         <thinking>
@@ -238,78 +238,69 @@ async def get_user_tools(user_id: str):
             except Exception as e:
                 logger.warning(f"Could not process base tool {tool}: {e}")
         
-        # Add user-configured MCP server tools
+        # Add user-configured MCP server tools with proper resource management
         if user_mcp_configs:
             try:
-                user_clients = mcp_client_manager.create_clients_from_config(user_mcp_configs)
-                for i, client in enumerate(user_clients):
-                    try:
-                        client.__enter__()
-                        user_tools = client.list_tools_sync()
-                        logger.info(f"Retrieved {len(user_tools)} tools from MCP client")
-                        server_name = user_mcp_configs[i].name if i < len(user_mcp_configs) else f"MCP Server {i+1}"
-                        
-                        for tool in user_tools:
-                            try:
-                                # Debug logging to understand tool structure
-                                logger.info(f"Processing MCP tool: {tool}")
-                                logger.info(f"Tool type: {type(tool)}")
-                                logger.info(f"Tool attributes: {[attr for attr in dir(tool) if not attr.startswith('_')]}")
-                                
-                                # Try multiple ways to get the tool name
-                                tool_name = None
-                                if hasattr(tool, 'name'):
-                                    tool_name = tool.name
-                                elif hasattr(tool, 'tool_name'):
-                                    tool_name = tool.tool_name
-                                elif hasattr(tool, '_name'):
-                                    tool_name = tool._name
-                                elif hasattr(tool, '__name__'):
-                                    tool_name = tool.__name__
-                                elif hasattr(tool, 'function_name'):
-                                    tool_name = tool.function_name
-                                elif hasattr(tool, 'schema') and hasattr(tool.schema, 'name'):
-                                    tool_name = tool.schema.name
-                                else:
-                                    # If all else fails, try to get it from the tool's attributes
-                                    tool_name = f"Tool_{len(tools_info)}"
-                                
-                                # Try multiple ways to get the description
-                                description = None
-                                if hasattr(tool, 'description'):
-                                    description = tool.description
-                                elif hasattr(tool, '__doc__'):
-                                    description = tool.__doc__
-                                elif hasattr(tool, '_description'):
-                                    description = tool._description
-                                elif hasattr(tool, 'schema') and hasattr(tool.schema, 'description'):
-                                    description = tool.schema.description
-                                
-                                if description:
-                                    description = str(description).strip().split('\n')[0]  # First line only
-                                
-                                tools_info.append({
-                                    "name": tool_name,
-                                    "description": description,
-                                    "source": server_name
-                                })
-                            except Exception as e:
-                                logger.warning(f"Could not process user MCP tool {tool}: {e}")
-                                # Add a fallback entry with basic info
-                                tools_info.append({
-                                    "name": f"Unknown Tool {len(tools_info)}",
-                                    "description": f"Tool from {server_name}",
-                                    "source": server_name
-                                })
-                    except Exception as e:
-                        logger.error(f"Failed to get tools from user MCP client: {str(e)}")
-                    finally:
+                async with mcp_client_manager.get_combined_tools(user_mcp_configs) as (user_tools, clients):
+                    logger.info(f"Retrieved {len(user_tools)} tools from {len(clients)} MCP clients")
+                    
+                    for i, tool in enumerate(user_tools):
                         try:
-                            client.__exit__(None, None, None)
-                        except:
-                            pass
+                            # Debug logging to understand tool structure
+                            logger.debug(f"Processing MCP tool: {tool}")
+                            
+                            # Try multiple ways to get the tool name
+                            tool_name = None
+                            if hasattr(tool, 'name'):
+                                tool_name = tool.name
+                            elif hasattr(tool, 'tool_name'):
+                                tool_name = tool.tool_name
+                            elif hasattr(tool, '_name'):
+                                tool_name = tool._name
+                            elif hasattr(tool, '__name__'):
+                                tool_name = tool.__name__
+                            elif hasattr(tool, 'function_name'):
+                                tool_name = tool.function_name
+                            elif hasattr(tool, 'schema') and hasattr(tool.schema, 'name'):
+                                tool_name = tool.schema.name
+                            else:
+                                tool_name = f"MCP_Tool_{i}"
+                            
+                            # Try multiple ways to get the description
+                            description = None
+                            if hasattr(tool, 'description'):
+                                description = tool.description
+                            elif hasattr(tool, '__doc__'):
+                                description = tool.__doc__
+                            elif hasattr(tool, '_description'):
+                                description = tool._description
+                            elif hasattr(tool, 'schema') and hasattr(tool.schema, 'description'):
+                                description = tool.schema.description
+                            
+                            if description:
+                                description = str(description).strip().split('\n')[0]  # First line only
+                            
+                            # Determine source server name
+                            server_name = "MCP Server"
+                            if i < len(user_mcp_configs):
+                                server_name = user_mcp_configs[i].name
+                            
+                            tools_info.append({
+                                "name": tool_name,
+                                "description": description,
+                                "source": server_name
+                            })
+                        except Exception as e:
+                            logger.warning(f"Could not process MCP tool {tool}: {e}")
+                            # Add a fallback entry with basic info
+                            tools_info.append({
+                                "name": f"Unknown_Tool_{len(tools_info)}",
+                                "description": "MCP tool",
+                                "source": "MCP Server"
+                            })
+                            
             except Exception as e:
-                logger.error(f"Failed to create user MCP clients: {str(e)}")
+                logger.error(f"Failed to get MCP tools: {str(e)}")
         
         return {
             "tools": tools_info,
@@ -473,30 +464,116 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="No user_id provided")
 
     async def generate(session_id: str, user_id: str, query: str):
+        active_mcp_clients = []
         try:
             # Get user's MCP configuration
             user_config = await mcp_config_store.get_user_config(user_id)
             user_mcp_configs = user_config.servers if user_config else []
             
-            # Build agent with user's MCP configurations
-            agent = build_agent_for_session(session_id, user_id, user_mcp_configs)
+            # If user has MCP configs, use the context manager for proper resource management
+            if user_mcp_configs:
+                async with mcp_client_manager.get_combined_tools(user_mcp_configs) as (mcp_tools, clients):
+                    active_mcp_clients = clients
+                    
+                    # Build session manager and conversation manager
+                    session_manager = S3SessionManager(
+                        session_id=session_id,
+                        bucket=SESSIONS_BUCKET_NAME,
+                        prefix=f"sessions/user_{user_id}",
+                        boto_session=session,
+                        region_name=AWS_REGION
+                    )
+                    conversation_manager = SlidingWindowConversationManager(
+                        window_size=10
+                    )
+                    
+                    # Combine base tools with MCP tools
+                    base_tools = [web_search, http_request, retrieve]
+                    all_tools = base_tools + mcp_tools
+                    
+                    # Create agent with all tools
+                    agent = Agent(
+                        agent_id="ragbot2",
+                        system_prompt="""
+        You are an AI assistant that helps users answer any type of questions with access to multiple tools:
+            - Web search using LinkUp API (web_search)
+            - User-configured MCP servers with custom capabilities
+            - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)
+            
+        **Instructions:**
+        - For EVERY user query, you MUST use at least one tool.
+            - The web_search tool is ideal for real-time information (e.g. weather, stock prices, news, and anything that can change minute-to-minute).
+            - The retrieve tool is ideal for niche information (e.g. information about cars).
+            - Use the MCP tools if the query is something related to what the MCP tools are capable of (i.e. AWS services).
+        - NEVER answer based solely on your own knowledge, even if you think you know the answer.
+        - Only answer after reviewing results from all relevant tools.
+        
+        **Response:**
+        - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
+            - <thinking>: Explain your approach, reasoning, and tool choices.
+            - <response>: Provide a clear, human-readable answer.
+            - <sources>: List ALL tool outputs and/or sources used.
+        - Do NOT output anything except these three tags.
+        - Respond in a friendly, Albertan tone.
+        
+        **Example valid output:**
+        <thinking>
+        I used both web_search and retrieve because the user asked about current events and general knowledge.
+        </thinking>
 
-            try:
-                agent_stream = agent.stream_async(query)
+        <response>
+        Here is the answer to your question based on the latest available sources...
+        </response>
+
+        <sources>
+        - web_search: [search summary]
+        - retrieve: [document snippet]
+        </sources>
+
+        Always follow this response structure and do NOT skip tool calls, otherwise your response is considered invalid.
+        """,
+                        tools=all_tools,
+                        model=bedrock_model,
+                        session_manager=session_manager,
+                        conversation_manager=conversation_manager,
+                        callback_handler=None
+                    )
+                    
+                    try:
+                        agent_stream = agent.stream_async(query)
+                        
+                        chunk_count = 0
+                        async for event in agent_stream:
+                            if "data" in event:
+                                # Only stream text chunks to the client
+                                chunk_count += 1
+                                if chunk_count % 60 == 0:  # Log every 60th chunk
+                                    logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
+                                yield event['data']
+                        logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+                    except Exception as e:
+                        logger.error(f"Error in agent stream: {str(e)}")
+                        yield f"Error: {str(e)}"
+            else:
+                # No MCP configs, use the original build_agent_for_session function
+                agent = build_agent_for_session(session_id, user_id, None)
                 
-                chunk_count = 0
-                async for event in agent_stream:
-                    if "data" in event:
-                        # Only stream text chunks to the client
-                        chunk_count += 1
-                        if chunk_count % 60 == 0:  # Log every 60th chunk
-                            logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
-                        yield event['data']
-                logger.info(f"Streaming response complete - total chunks: {chunk_count}")
-            except Exception as e:
-                logger.error(f"Error in agent stream: {str(e)}")
-                yield f"Error: {str(e)}"
-                
+                try:
+                    agent_stream = agent.stream_async(query)
+                    
+                    chunk_count = 0
+                    async for event in agent_stream:
+                        if "data" in event:
+                            # Only stream text chunks to the client
+                            chunk_count += 1
+                            if chunk_count % 60 == 0:  # Log every 60th chunk
+                                logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
+                            yield event['data']
+                    logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+                except Exception as e:
+                    logger.error(f"Error in agent stream: {str(e)}")
+                    yield f"Error: {str(e)}"
+                    
         except Exception as e:
             logger.error(f"Error setting up agent: {str(e)}")
             yield f"Error setting up agent: {str(e)}"

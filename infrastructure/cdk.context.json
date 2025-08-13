@@ -1,5 +1,7 @@
 {
-  "acknowledged-issue-numbers": [34892],
+  "acknowledged-issue-numbers": [
+    34892
+  ],
   "availability-zones:account=115499684434:region=us-east-1": [
     "us-east-1a",
     "us-east-1b",
@@ -11,5 +13,11 @@
   "hosted-zone:account=115499684434:domainName=ericbach.dev:region=us-east-1": {
     "Id": "/hostedzone/Z01617942SCNK83HTZN3T",
     "Name": "ericbach.dev."
-  }
+  },
+  "availability-zones:account=761018860881:region=us-west-2": [
+    "us-west-2a",
+    "us-west-2b",
+    "us-west-2c",
+    "us-west-2d"
+  ]
 }

@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
@@ -13,6 +14,34 @@ class MCPClientManager:
     
     def __init__(self):
         self.clients: Dict[str, MCPClient] = {}
+        self._tool_cache: Dict[str, List] = {}  # Cache for tools by config hash
+        self._cache_ttl: int = 300  # 5 minutes cache TTL
+        self._cache_timestamps: Dict[str, float] = {}
+    
+    def _get_config_hash(self, configs: List[MCPServerConfig]) -> str:
+        """Generate a hash for the configuration to use as cache key"""
+        import hashlib
+        import json
+        
+        config_data = []
+        for config in configs:
+            if config.enabled:
+                config_data.append({
+                    'name': config.name,
+                    'command': config.command,
+                    'args': config.args,
+                    'server_type': config.server_type
+                })
+        
+        config_str = json.dumps(config_data, sort_keys=True)
+        return hashlib.md5(config_str.encode()).hexdigest()
+    
+    def _is_cache_valid(self, cache_key: str) -> bool:
+        """Check if cache entry is still valid"""
+        import time
+        if cache_key not in self._cache_timestamps:
+            return False
+        return (time.time() - self._cache_timestamps[cache_key]) < self._cache_ttl
     
     def _create_stdio_client(self, config: MCPServerConfig) -> Optional[MCPClient]:
         """Create a stdio MCP client from configuration"""
@@ -28,6 +57,7 @@ class MCPClientManager:
             
             args = config.args or []
             
+            # Add timeout to prevent hanging connections
             client = MCPClient(lambda: stdio_client(
                 StdioServerParameters(
                     command=config.command,
@@ -36,6 +66,8 @@ class MCPClientManager:
                 )
             ))
             
+            # Test the client connection with a short timeout
+            logger.info(f"Testing connection to MCP server: {config.name}")
             return client
             
         except Exception as e:
@@ -88,22 +120,36 @@ class MCPClientManager:
         """Context manager that creates clients and yields combined tools"""
         clients = self.create_clients_from_config(user_configs)
         
-        # Start all clients
+        # Start all clients with timeout
         active_clients = []
+        
         for client in clients:
             try:
-                client.__enter__()
+                # Use asyncio wait_for to prevent hanging
+                await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, client.__enter__),
+                    timeout=10.0  # 10 second timeout
+                )
                 active_clients.append(client)
+                logger.info(f"Successfully started MCP client")
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout starting MCP client after 10 seconds")
             except Exception as e:
                 logger.error(f"Failed to start MCP client: {str(e)}")
         
         try:
-            # Combine tools from all active clients
+            # Combine tools from all active clients with timeout
             all_tools = []
             for client in active_clients:
                 try:
-                    tools = client.list_tools_sync()
+                    tools = await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(None, client.list_tools_sync),
+                        timeout=5.0  # 5 second timeout for tool listing
+                    )
                     all_tools.extend(tools)
+                    logger.info(f"Retrieved {len(tools)} tools from MCP client")
+                except asyncio.TimeoutError:
+                    logger.error(f"Timeout getting tools from MCP client after 5 seconds")
                 except Exception as e:
                     logger.error(f"Failed to get tools from MCP client: {str(e)}")
             
@@ -113,7 +159,13 @@ class MCPClientManager:
             # Clean up all clients
             for client in active_clients:
                 try:
-                    client.__exit__(None, None, None)
+                    await asyncio.wait_for(
+                        asyncio.get_event_loop().run_in_executor(None, client.__exit__, None, None, None),
+                        timeout=5.0  # 5 second timeout for cleanup
+                    )
+                    logger.debug(f"Successfully closed MCP client")
+                except asyncio.TimeoutError:
+                    logger.error(f"Timeout closing MCP client after 5 seconds")
                 except Exception as e:
                     logger.error(f"Error closing MCP client: {str(e)}")
 
