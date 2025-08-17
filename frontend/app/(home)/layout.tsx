@@ -116,7 +116,7 @@ export default function RootLayout({
 
       return (
         <View textAlign='center' padding={tokens.space.large} paddingTop='6rem'>
-          <Image alt='RAGBot 2' src='logo.png' width={54} />
+          <Image alt='RAGBot 2' src='/logo.png' width={54} height={54} />
           <Heading level={4}>RAGBot 2</Heading>
         </View>
       );

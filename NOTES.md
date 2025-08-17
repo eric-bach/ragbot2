@@ -24,7 +24,6 @@
 - [x] Build estimate cost list
 - [x] BUG: The first request fails unless you wait a few seconds after loading the page
 
-- [] Fix double tool call in frontend
 - [] Fix double instances of MCP client in backend
 - [] Improve the feel of the responsiveness of responses after the message is submitted
 
