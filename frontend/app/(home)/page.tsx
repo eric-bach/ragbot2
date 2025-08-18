@@ -174,7 +174,7 @@ export default function Home() {
           if (value) {
             chunkCount++;
             const chunk = decoder.decode(value, { stream: true });
-            console.log(`Chunk ${chunkCount}:`, chunk.substring(0, 100));
+            console.log(`Frontend received chunk ${chunkCount}, bytes: ${value.length}, content:`, chunk.substring(0, 100));
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time

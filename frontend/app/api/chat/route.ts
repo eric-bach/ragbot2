@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,6 +28,8 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'text/plain',
+        'User-Agent': 'RAGBot-Frontend/1.0',
       },
       body: JSON.stringify({
         query: body.query,
@@ -56,69 +58,38 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('RAGBot API error response:', errorText);
-      return NextResponse.json({ error: 'Backend service error', details: errorText }, { status: response.status });
+      return new Response(JSON.stringify({ error: 'Backend service error', details: errorText }), {
+        status: response.status,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('Response body type:', typeof response.body);
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        const reader = response.body?.getReader();
-        if (!reader) {
-          console.error('No response body reader available');
-          controller.error(new Error('No response body reader available'));
-          return;
-        }
-
-        const decoder = new TextDecoder();
-
-        try {
-          let chunkCount = 0;
-          while (true) {
-            const { done, value } = await reader.read();
-
-            if (done) {
-              console.log('Streaming complete, total chunks:', chunkCount);
-              controller.close();
-              break;
-            }
-
-            if (value) {
-              chunkCount++;
-              const chunk = decoder.decode(value, { stream: true });
-              console.log(
-                `Streaming chunk ${chunkCount} to frontend, length:`,
-                chunk.length,
-                'content:',
-                chunk.substring(0, 100)
-              );
-              controller.enqueue(new TextEncoder().encode(chunk));
-            }
-          }
-        } catch (error) {
-          console.error('Error in streaming:', error);
-          controller.error(error);
-        } finally {
-          reader.releaseLock();
-        }
-      },
-    });
-
-    return new Response(stream, {
+    // Return the response directly with proper streaming headers
+    return new Response(response.body, {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+        'Transfer-Encoding': 'chunked',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no', // Disable nginx buffering
-        'Transfer-Encoding': 'chunked',
       },
     });
   } catch (error) {
     console.error('Error in chat API route:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
     );
   }
 }

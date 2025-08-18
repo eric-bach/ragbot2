@@ -321,5 +321,13 @@ async def chat(request: ChatRequest):
 
     return StreamingResponse(
         generate(request.session_id, request.user_id, request.query),
-        media_type="text/plain"
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx/cloudflare buffering
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type"
+        }
     )

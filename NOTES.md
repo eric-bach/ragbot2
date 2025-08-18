@@ -94,6 +94,12 @@ TESTS
    curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is fuel capacity of a 2007 Camry?", "session_id": "1", "user_id": "1"}'
    curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?", "session_id": "1", "user_id": "1"}'
    curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?", "session_id": "1", "user_id": "1"}'
+
+
+   Test Frontend
+curl -X POST http://localhost:3000/api/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like in Paris", "session_id": "test", "user_id": "test"}' --no-buffer
+curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like in Paris", "session_id": "test", "user_id": "test"}' --no-buffer
+
 ```
 
 ##### Cloudflare
