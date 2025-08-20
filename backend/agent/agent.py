@@ -10,8 +10,8 @@ from strands.models import BedrockModel
 from strands.tools.mcp import MCPClient
 from strands.session.s3_session_manager import S3SessionManager
 from strands.agent.conversation_manager import SummarizingConversationManager, SlidingWindowConversationManager
-from mcp import stdio_client, StdioServerParameters
 from tools.web_search import web_search
+from mcp_client_manager import MCPClientManager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,12 +36,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize MCP client on startup"""
+    try:
+        logger.info("Initializing MCP client on startup...")
+        mcp_manager.get_client()
+        logger.info("MCP client initialized successfully on startup")
+    except Exception as e:
+        logger.warning(f"Failed to initialize MCP client on startup: {e}")
+        logger.info("MCP client will be initialized on first use")
+
 load_dotenv()
-AWS_REGION = os.getenv('AWS_REGION', 'us-east-1') # Used by the Bedrock model
+AWS_REGION = os.getenv('AWS_REGION', 'us-west-2') # Used by the Bedrock model
 BEDROCK_MODEL_ID = os.getenv('BEDROCK_MODEL_ID') 
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID') # Used by the retrieve tool
 SESSIONS_BUCKET_NAME = os.getenv('SESSIONS_BUCKET_NAME') # Used by Strands Agent sessions
-SOURCE_BUCKET_NAME = os.getenv('SOURCE_BUCKET_NAME') # Used by the presigned-url endpoint
+KNOWLEDGE_SOURCE_BUCKET_NAME = os.getenv('KNOWLEDGE_SOURCE_BUCKET_NAME') # Used by the presigned-url endpoint
 LINKUP_API_KEY = os.getenv('LINKUP_API_KEY') # Used by the web_search tool
 
 # Create session without profile for ECS deployment
@@ -60,6 +71,9 @@ bedrock_model = BedrockModel(
     model_id=BEDROCK_MODEL_ID,
     boto_session=session
 )
+
+# Global MCP client manager
+mcp_manager = MCPClientManager()
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -145,24 +159,15 @@ def health():
         "AWS_REGION": AWS_REGION,
         "KNOWLEDGE_BASE_ID": KNOWLEDGE_BASE_ID,
         "SESSIONS_BUCKET_NAME": SESSIONS_BUCKET_NAME,
-        "SOURCE_BUCKET_NAME": SOURCE_BUCKET_NAME,
+        "KNOWLEDGE_SOURCE_BUCKET_NAME": KNOWLEDGE_SOURCE_BUCKET_NAME,
         "LINKUP_API_KEY": f"***{LINKUP_API_KEY[-3:]}",
     }
 
 @app.get("/tools")
 def get_tools():
     """Get list of available tools for the AI agent"""
-    aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
-        StdioServerParameters(
-            command="uvx", 
-            args=["awslabs.aws-documentation-mcp-server@latest"],
-            env={
-                "FASTMCP_LOG_LEVEL": "ERROR",
-                "AWS_DOCUMENTATION_PARTITION": "aws"
-            }
-        )
-    ))
-
+    import time
+    
     base_tools = [web_search, http_request, retrieve]
     tools_info = []
 
@@ -192,24 +197,40 @@ def get_tools():
         except Exception as e:
             logger.warning(f"Could not process strands tool {tool}: {e}")
 
-    # Add aws_tools
-    with aws_documentation_mcp_client:  
-        aws_tools = aws_documentation_mcp_client.list_tools_sync()
-        
-        for tool in aws_tools:
-            try:
-                # Get the tool name, description, and source
-                tool_name = tool.tool_name
-                description = tool.tool_spec["description"].strip().split('\n')[0]
-                source = "aws"
+    # Add AWS tools with retry logic
+    max_retries = 3
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            aws_documentation_mcp_client = mcp_manager.get_client()
+            with aws_documentation_mcp_client:  
+                aws_tools = aws_documentation_mcp_client.list_tools_sync()
+                
+                for tool in aws_tools:
+                    try:
+                        # Get the tool name, description, and source
+                        tool_name = tool.tool_name
+                        description = tool.tool_spec["description"].strip().split('\n')[0]
+                        source = "aws"
 
-                tools_info.append({
-                    "name": tool_name,
-                    "description": description,
-                    "source": source
-                })
-            except Exception as e:
-                logger.warning(f"Could not process AWS tool {tool}: {e}")
+                        tools_info.append({
+                            "name": tool_name,
+                            "description": description,
+                            "source": source
+                        })
+                    except Exception as e:
+                        logger.warning(f"Could not process AWS tool {tool}: {e}")
+            break  # Success, exit retry loop
+            
+        except Exception as e:
+            logger.warning(f"Attempt {attempt + 1} failed to get AWS tools: {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                logger.error("Failed to get AWS tools after all retries")
 
     return {
         "tools": tools_info,
@@ -241,7 +262,7 @@ def generate_presigned_url(user_id: str = Query(..., description="User ID"), fil
         presigned_url = s3.generate_presigned_url(
             ClientMethod="put_object",
             Params={
-                "Bucket": SOURCE_BUCKET_NAME,
+                "Bucket": KNOWLEDGE_SOURCE_BUCKET_NAME,
                 "Key": key,
                 "ContentType": "application/pdf",
             },
@@ -252,7 +273,7 @@ def generate_presigned_url(user_id: str = Query(..., description="User ID"), fil
         return {
             "presignedurl": presigned_url,
             "key": key,
-            "bucket": SOURCE_BUCKET_NAME
+            "bucket": KNOWLEDGE_SOURCE_BUCKET_NAME
         }
         
     except Exception as e:
@@ -287,16 +308,7 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="No user_id provided")
 
     async def generate(session_id: str, user_id: str, query: str):
-        aws_documentation_mcp_client = MCPClient(lambda: stdio_client(
-            StdioServerParameters(
-                command="uvx", 
-                args=["awslabs.aws-documentation-mcp-server@latest"],
-                env={
-                    "FASTMCP_LOG_LEVEL": "ERROR",
-                    "AWS_DOCUMENTATION_PARTITION": "aws"
-                }
-            )
-        ))
+        aws_documentation_mcp_client = mcp_manager.get_client()
         
         with aws_documentation_mcp_client:
             agent = build_agent_for_session(session_id, user_id, mcp_client=aws_documentation_mcp_client)

@@ -38,7 +38,7 @@ def handler(event, context):
                 }
             
             # Initialize Bedrock client
-            bedrock = boto3.client('bedrock-agent', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+            bedrock = boto3.client('bedrock-agent', region_name=os.environ.get('AWS_REGION', 'us-west-2'))
             
             # Get the S3 object details
             s3_client = boto3.client('s3')
