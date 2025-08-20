@@ -39,9 +39,7 @@ The project is structured into 3 folders:
 ```
 /ragbot2/
 └── backend/
-    ├── aws/            # Strands Agent server code
-         ├── .env       # .env file required for running locally
-    └── local/          # Local Strands Agent for local testing
+    ├── agent/          # Strands Agent server code
          ├── .env       # .env file required for running locally
 └── frontend/           # NextJS frontend chatbot UI
     ├── .env.local      # .env file for frontend client
@@ -49,80 +47,124 @@ The project is structured into 3 folders:
     ├── .env            # .env file required for deploying backend resources
 ```
 
-### Backend
+#### Deploying to AWS
 
-1. Install Dependencies
+The CDK infrastructure will create 2 stacks
 
-```bash
-cd infrastructure
-pip install -r requirements.txt
+- `ragbot2-data` - stateful resources containing VPC, Cognito, S3 buckets
+- `ragbot2-app` - stateless resources containing Lambda, ECS, ALB, API GW
+
+1. Run the Python virtual environment
+
+   ```
+   cd infrastructure
+
+   python -m venv .venv
+   ```
+
+2. Install requirements
+
+   ```
+   pip install -r requirements.txt
+   ```
+
+3. Deploy the backend
+
+   ```
+   ./deploy.sh
+   ```
+
+   - or -
+
+   ```
+   cdk deploy --all --profile observability2
+   ```
+
+4. The frontend is deployed with Vercel (AWS Amplify does not support streaming responses)
+
+#### Running backend agent locally
+
+1. Create a `.env` file in the `/backend/agent` folder
+
+   ```
+   AWS_PROFILE=
+   AWS_REGION=
+   BEDROCK_MODEL_ID=
+   KNOWLEDGE_BASE_ID=
+   SESSIONS_BUCKET_NAME=
+   KNOWLEDGE_SOURCE_BUCKET_NAME=
+   LINKUP_API_KEY=
+   ```
+
+2. Build and run the docker container
+
+   ```
+   cd `/backend/agent`
+
+   ./run_local_agent.sh
+   ```
+
+   - or -
+
+   ```
+   docker build -t ragbot-agent .
+   docker run --rm --interactive --env-file .env -v //c/Users/eric.bach/.aws:/root/.aws -p 8000:8000 ragbot-agent
+   ```
+
+3. Run the frontend
+
+   ```
+   cd frontend
+
+   npm run dev
+   ```
+
+#### Testing the backend API
+
+**Testing the backend API running locally**
+
+Backend
+
+```
+curl -X GET http://localhost:8000/health
+curl -X GET http://localhost:8000/tools
+curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is AWS Lambda?", "session_id": "1", "user_id": "1"}'
+curl -X POST http://localhost:8000/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Seattle?", "session_id": "1", "user_id": "1"}'
 ```
 
-2. Configure Backend Environment Variables
+Frontend
 
-Create a `.env` file in the `infrastructure/` folder:
-
-```bash
-# AWS Configuration
-AWS_REGION=your_aws_region
-
-# Bedrock Knowledge Base Configuration (this needs to be manually created in the AWS Console outside of CDK since it's not supported yet)
-KNOWLEDGE_BASE_ID=your_knowledge_base_id
-KNOWLEDGE_BASE_DATA_SOURCE_ID=your_knowledge_base_data_source_id
-
-# SSL Certificate for ALB
-CERTIFICATE_ARN=your_certificate_arn
-
-# LinkUp API Configuration
-LINKUP_API_KEY=your_actual_linkup_api_key
+```
+curl -X POST http://localhost:3000/api/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like in Paris", "session_id": "test", "user_id": "test"}' --no-buffer
 ```
 
-3. Deploy Backend
+**Testing the backend API running in AWS**
 
-```bash
-cdk deploy --profile AWS_PROFILE
+Backend
+
+```
+curl -X GET https://ragbot2-public.ericbach.dev/health
+curl -X GET https://ragbot2-public.ericbach.dev/tools
+curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "How many GSIs can I have in a DynamoDB table?", "session_id": "1", "user_id": "1"}'
+curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like today in Edmonton?", "session_id": "1", "user_id": "1"}'
 ```
 
-### Frontend
+Frontend
 
-4. Configure Frontend Environment Variables
-
-Create a `.env` file in the `frontend/` folder and set the values from the CDK stack outputs:
-
-```bash
-NEXT_PUBLIC_COGNITO_USER_POOL_ID=
-NEXT_PUBLIC_COGNITO_CLIENT_ID=
-NEXT_PUBLIC_PUBLIC_URL=
+```
+curl -X POST https://ragbot2-public.ericbach.dev/chat -H 'Content-Type: application/json' -d '{"query": "What is the weather like in Paris", "session_id": "test", "user_id": "test"}' --no-buffer
 ```
 
-5. The frontend is deployed via Vercel (AWS Amplify does not support streaming responses)
+## Troubleshooting
 
-### Local Testing
+**Check what headers Cloudflare is returning**
 
-To test the Strands Agent locally
-
-1. Configure the Environment Variables
-
-Create a `.env` file in the `backend/local/` folder:
-
-```bash
-# AWS Configuration
-AWS_REGION=your_aws_region
-AWS_PROFILE=your_aws_profile_name
-
-# Bedrock Knowledge Base Configuration (this needs to be manually created in the AWS Console outside of CDK since it's not supported yet)
-KNOWLEDGE_BASE_ID=your_knowledge_base_id
-SOURCE_BUCKET_NAME=knowledge_base_data_source_bucket_from_cdk_stack
-SESSIONS_BUCKET_NAME=sessions_bucket_name_from_cdk_stack
-
-# LinkUp API Configuration
-LINKUP_API_KEY=your_actual_linkup_api_key
 ```
+# Get the Cloudflare proxy IP addresses
+nslookup ragbot2-public.ericbach.dev 8.8.8.8
 
-2. Run the script
-
-```bash
-./run_agent.sh
+# Check what headers Cloudflare is returning using one of the proxy IP addresses
+curl -v https://ragbot2-public.ericbach.dev/health --resolve ragbot2-public.ericbach.dev:443:172.67.210.169 2>&1 | grep -E "(CF-|X-|>|<)"
 ```
 
 ## How It Works

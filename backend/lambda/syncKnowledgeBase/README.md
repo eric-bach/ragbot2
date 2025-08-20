@@ -12,7 +12,7 @@ This Lambda function is triggered by S3 events when PDF files are uploaded to th
 ## Environment Variables:
 
 - `KNOWLEDGE_BASE_ID`: Your Bedrock Knowledge Base ID
-- `AWS_REGION`: AWS region (defaults to us-east-1)
+- `AWS_REGION`: AWS region (defaults to us-west-2)
 
 ## Permissions:
 

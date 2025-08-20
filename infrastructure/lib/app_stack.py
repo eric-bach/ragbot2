@@ -1,4 +1,5 @@
 import os
+from constructs import Construct
 from aws_cdk import (
     Stack,
     aws_s3 as s3,
@@ -22,74 +23,74 @@ from aws_cdk import (
     RemovalPolicy,
 )
 from pathlib import Path
-from constructs import Construct
+from .data_stack import DataStackResources
 from dotenv import load_dotenv
 
-class Ragbot2Stack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+class AppStack(Stack):
+    def __init__(self, scope: Construct, construct_id: str, app_name: str, env_name: str, data_resources: DataStackResources, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Load environment variables from .env file
         load_dotenv()
         
         # Get environment variables with fallbacks
-        AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
+        APP_NAME = app_name
+        ENV_NAME = env_name
+        AWS_REGION = os.getenv('AWS_REGION', 'us-west-2')
+        CERTIFICATE_ARN = os.getenv('CERTIFICATE_ARN', '')
         BEDROCK_MODEL_ID = os.getenv('BEDROCK_MODEL_ID', '')
         KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID', '')
         KNOWLEDGE_BASE_DATA_SOURCE_ID = os.getenv('KNOWLEDGE_BASE_DATA_SOURCE_ID', '')
-        CERTIFICATE_ARN = os.getenv('CERTIFICATE_ARN', '')
         LINKUP_API_KEY = os.getenv('LINKUP_API_KEY', '')
-        APP_NAME = os.getenv('APP_NAME', 'ragbot2')
 
-        # Add S3 bucket for Strands Agent sessions
-        sessions_bucket = s3.Bucket(
+        # Extract resources from data stack
+        vpc = data_resources.vpc
+        
+        # Lookup S3 buckets by ARN
+        knowledge_source_bucket = s3.Bucket.from_bucket_arn(
             self,
-            "ragbot-sessions-bucket",
-            bucket_name=f"ragbot-sessions-bucket-{self.account}-{self.region}",
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-            versioned=True,
+            "KnowledgeSourceBucket",
+            bucket_arn=data_resources.knowledge_source_bucket_arn
         )
-
-        # Add S3 bucket for knowledge base source data
-        bucket = s3.Bucket(
+        sessions_bucket = s3.Bucket.from_bucket_arn(
             self,
-            "ragbot-source-bucket",
-            bucket_name=f"ragbot-source-bucket-{self.account}-{self.region}",
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
-            versioned=True,
+            "SessionsBucket", 
+            bucket_arn=data_resources.sessions_bucket_arn
         )
 
-        # Add CORS configuration to allow browser uploads
-        bucket.add_cors_rule(
-            allowed_methods=[s3.HttpMethods.PUT],
-            allowed_origins=["*"],  # In production, specify your domain
-            allowed_headers=["*"],  # Allow all headers for presigned URL uploads
-            exposed_headers=["ETag"],
-            max_age=3000,
+        #
+        # AWS ACM
+        #
+
+        certificate = acm.Certificate.from_certificate_arn(
+            self,
+            "Certificate",
+            certificate_arn=CERTIFICATE_ARN
         )
+
+        #
+        # AWS Lambda
+        #
 
         # Create Lambda function for processing uploaded files
-        knowledge_base_sync_lambda = lambda_.Function(
+        sync_knowledge_base = lambda_.Function(
             self,
-            "KnowledgeBaseSyncLambda",
+            "SyncKnowledgeBaseFunction",
+            function_name=f"{APP_NAME}-sync-knowledge-base-{ENV_NAME}",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="knowledge_base_sync.handler",
-            code=lambda_.Code.from_asset(str(Path(__file__).parent.parent / "lambda")),
+            handler="sync_knowledge_base.handler",
+            code=lambda_.Code.from_asset(str(Path(__file__).parent.parent / "../backend/lambda/syncKnowledgeBase")),
             environment={
                 'KNOWLEDGE_BASE_ID': KNOWLEDGE_BASE_ID,
                 'KNOWLEDGE_BASE_DATA_SOURCE_ID': KNOWLEDGE_BASE_DATA_SOURCE_ID,
             },
-            timeout=Duration.seconds(300),  # 5 minutes
+            timeout=Duration.seconds(300),
             memory_size=512,
         )
-
         # Grant the Lambda function permissions to read from S3
-        bucket.grant_read(knowledge_base_sync_lambda)
-
+        knowledge_source_bucket.grant_read(sync_knowledge_base)
         # Grant the Lambda function permissions to call Bedrock APIs
-        knowledge_base_sync_lambda.add_to_role_policy(
+        sync_knowledge_base.add_to_role_policy(
             iam.PolicyStatement(
                 actions=[
                     "bedrock:StartIngestionJob",
@@ -101,86 +102,64 @@ class Ragbot2Stack(Stack):
                 resources=["*"],
             )
         )
-
         # Add S3 event notification to trigger Lambda when files are uploaded
-        bucket.add_event_notification(
+        knowledge_source_bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED_PUT,
-            s3n.LambdaDestination(knowledge_base_sync_lambda),
+            s3n.LambdaDestination(sync_knowledge_base),
             s3.NotificationKeyFilter(suffix='.pdf')
         )
 
-        # # TODO Add Knowledge Bases with Vector S3 (when supported in CloudFormation)
-        # bedrock_role = iam.Role(
-        #     self,
-        #     "bedrock-role",
-        #     assumed_by=iam.ServicePrincipal("bedrock.amazonaws.com"),
-        #     managed_policies=[iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")]
-        # )
+        #
+        # ALB Security Groups
+        # 
 
-        # # Add S3 permissions for the specific buckets
-        # bedrock_role.add_to_policy(
-        #     iam.PolicyStatement(
-        #         actions=[
-        #             "s3:GetObject",
-        #             "s3:PutObject",
-        #             "s3:DeleteObject",
-        #             "s3:ListBucket"
-        #         ],
-        #         resources=[
-        #             f"{bucket.bucket_arn}",
-        #             f"{bucket.bucket_arn}/*",
-        #         ]
-        #     )
-        # )
-        
-        # knowledge_base = bedrock.CfnKnowledgeBase(
-        #     self,
-        #     "ragbot-knowledge-base",
-        #     name="ragbot-knowledge-base",
-        #     description="RAGBot Knowledge Base",
-        #     knowledge_base_configuration=bedrock.CfnKnowledgeBase.KnowledgeBaseConfigurationProperty(
-        #         type="VECTOR",
-        #         vector_knowledge_base_configuration=bedrock.CfnKnowledgeBase.VectorKnowledgeBaseConfigurationProperty(
-        #             embedding_model_arn="arn:aws:bedrock:us-west-2::foundation-model/amazon.titan-embed-text-v2:0"
-        #         )
-        #     ),
-        #     role_arn=bedrock_role.role_arn,
-        #     storage_configuration=bedrock.CfnKnowledgeBase.StorageConfigurationProperty(
-        #         type="VECTOR",
-        #         s3_configuration=bedrock.CfnKnowledgeBase.S3ConfigurationProperty(
-        #             # TODO S3 is not supported for Vector Knowledge Base in CloudFormation yet    
-        #         )
-        #     )
-        # )
+        # ALB security group
+        alb_sg = ec2.SecurityGroup(
+            self,
+            "ALBSG",
+            vpc=vpc,
+            description="Allow HTTP and HTTPS in",
+            allow_all_outbound=True,
+        )
+        alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(80), "Allow HTTP in")
+        alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443), "Allow HTTPS in")
 
-        # Create a VPC for our Fargate service
-        vpc = ec2.Vpc(
-            self, 
-            "AgentVpc",
-            max_azs=2,
-            nat_gateways=0,  # No NAT Gateway to save costs
-            #cidr="172.16.0.0/16",  # Use a different CIDR block to avoid conflicts
+        # Create security group
+        security_group = ec2.SecurityGroup(
+            self,
+            "ALBServiceSG",
+            vpc=vpc,
+            description="Only allow traffic from ALB",
+            allow_all_outbound=True,
+        )
+      
+        # Add ingress rule for port 8000
+        # security_group.add_ingress_rule(
+        #     peer=ec2.Peer.any_ipv4(),
+        #     connection=ec2.Port.tcp(8000),
+        #     description="Allow inbound traffic on port 8000"
+        # )
+        security_group.add_ingress_rule(
+            alb_sg,
+            ec2.Port.tcp(8000),
+            "Allow ALB to reach ECS task"
         )
 
+        #
+        # AWS ECS Fargate
+        #
+        
         # Create an ECS cluster
         cluster = ecs.Cluster(
             self, 
-            "AgentCluster",
+            "ECSCluster",
             vpc=vpc,
-        )
-
-        # Create a log group for the container
-        log_group = logs.LogGroup(
-            self, 
-            "AgentServiceLogs",
-            retention=logs.RetentionDays.ONE_WEEK,
-            removal_policy=RemovalPolicy.DESTROY,
         )
              
         # Create a task execution role
         execution_role = iam.Role(
             self, 
-            "AgentTaskExecutionRole",
+            "ECSTaskExecutionRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")
@@ -190,7 +169,7 @@ class Ragbot2Stack(Stack):
         # Create a task role with permissions to invoke Bedrock APIs
         task_role = iam.Role(
             self, 
-            "AgentTaskRole",
+            "ECSTaskRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
         )
 
@@ -217,7 +196,7 @@ class Ragbot2Stack(Stack):
                     "s3:DeleteObject",
                 ],
                 resources=[
-                    f"{bucket.bucket_arn}/*",
+                    f"{knowledge_source_bucket.bucket_arn}/*",
                     f"{sessions_bucket.bucket_arn}/*",
                 ],
             )
@@ -228,7 +207,7 @@ class Ragbot2Stack(Stack):
                     "s3:ListBucket"
                 ],
                 resources=[
-                    f"{bucket.bucket_arn}",
+                    f"{knowledge_source_bucket.bucket_arn}",
                     f"{sessions_bucket.bucket_arn}",
                 ],
             )
@@ -237,7 +216,7 @@ class Ragbot2Stack(Stack):
         # Create a task definition
         task_definition = ecs.FargateTaskDefinition(
             self, 
-            "AgentTaskDefinition",
+            "ECSTaskDefinition",
             memory_limit_mib=4096,
             cpu=1024,
             execution_role=execution_role,
@@ -249,18 +228,26 @@ class Ragbot2Stack(Stack):
         )
  
         # This will use the Dockerfile in the docker directory
-        docker_asset = ecr_assets.DockerImageAsset(
+        chat_agent = ecr_assets.DockerImageAsset(
             self, 
-            "AgentImage",
-            directory=str(Path(__file__).parent.parent / "../backend/aws"),
+            "ECSAgentImage",
+            directory=str(Path(__file__).parent.parent / "../backend/agent"),
             file="Dockerfile",
             platform=ecr_assets.Platform.LINUX_ARM64,
+        )
+        
+        # Create a log group for the container
+        log_group = logs.LogGroup(
+            self, 
+            "ECSLogGroup",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY,
         )
  
         # Add container to the task definition
         task_definition.add_container(
-            "AgentContainer",
-            image=ecs.ContainerImage.from_docker_image_asset(docker_asset),
+            "ECSAgentContainer",
+            image=ecs.ContainerImage.from_docker_image_asset(chat_agent),
             logging=ecs.LogDrivers.aws_logs(
                 stream_prefix="agent-service",
                 log_group=log_group,
@@ -272,7 +259,7 @@ class Ragbot2Stack(Stack):
                 "BEDROCK_MODEL_ID": BEDROCK_MODEL_ID,
                 "KNOWLEDGE_BASE_ID": KNOWLEDGE_BASE_ID,
                 "KNOWLEDGE_BASE_DATA_SOURCE_ID": KNOWLEDGE_BASE_DATA_SOURCE_ID,
-                "SOURCE_BUCKET_NAME": bucket.bucket_name,
+                "KNOWLEDGE_SOURCE_BUCKET_NAME": knowledge_source_bucket.bucket_name,
                 "SESSIONS_BUCKET_NAME": sessions_bucket.bucket_name,
                 "LINKUP_API_KEY": LINKUP_API_KEY,
             },
@@ -283,42 +270,11 @@ class Ragbot2Stack(Stack):
                 ),
             ],
         )
- 
-        # ALB security group
-        alb_sg = ec2.SecurityGroup(
-            self, "ALBSG",
-            vpc=vpc,
-            description="Allow HTTP and HTTPS in",
-            allow_all_outbound=True,
-        )
-        alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(80), "Allow HTTP in")
-        alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443), "Allow HTTPS in")
 
-        # Create security group
-        security_group = ec2.SecurityGroup(
-            self, 
-            "AgentServiceSG",
-            vpc=vpc,
-            description="Only allow traffic from ALB",
-            allow_all_outbound=True,
-        )
-      
-        # Add ingress rule for port 8000
-        # security_group.add_ingress_rule(
-        #     peer=ec2.Peer.any_ipv4(),
-        #     connection=ec2.Port.tcp(8000),
-        #     description="Allow inbound traffic on port 8000"
-        # )
-        security_group.add_ingress_rule(
-            alb_sg,
-            ec2.Port.tcp(8000),
-            "Allow ALB to reach ECS task"
-        )
-  
         # Create a Fargate service
         service = ecs.FargateService(
-            self, 
-            "AgentService",
+            self,
+            "ECSAgentService",
             cluster=cluster,
             task_definition=task_definition,
             desired_count=1,  # Run 1 instance to reduce costs
@@ -331,79 +287,24 @@ class Ragbot2Stack(Stack):
             health_check_grace_period=Duration.seconds(120),
         )
 
+        #
+        # AWS ALB
+        #
+        
         # Create a load balancer
         alb = elbv2.ApplicationLoadBalancer(
             self,
-            "AgentALB",
+            "ALB",
             vpc=vpc,
             internet_facing=True,
             security_group=alb_sg,
             load_balancer_name=f"{APP_NAME}-public",
         )
-    
-        certificate = acm.Certificate.from_certificate_arn(
-            self,
-            "AgentCertificate",
-            certificate_arn=CERTIFICATE_ARN
-        )
-
-        # Add Cognito User Pool for ALB authentication
-        user_pool = cognito.UserPool(
-            self,
-            "AgentUserPool",
-            user_pool_name=f"{APP_NAME}-users",
-            sign_in_aliases=cognito.SignInAliases(email=True),
-            auto_verify=cognito.AutoVerifiedAttrs(email=True),
-            self_sign_up_enabled=True,
-            user_verification=cognito.UserVerificationConfig(
-                email_subject="Verify your email for RAGBot",
-                email_body="Welcome to RAGBot! Your verification code is: {####}",
-                email_style=cognito.VerificationEmailStyle.CODE,
-            ),
-            password_policy=cognito.PasswordPolicy(
-                min_length=8,
-                require_lowercase=True,
-                require_uppercase=True,
-                require_digits=True,
-            ),
-            removal_policy=RemovalPolicy.DESTROY,
-        )
-        
-        react_user_pool_client = cognito.UserPoolClient(
-            self,
-            "ReactAgentUserPoolClient",
-            user_pool=user_pool
-        )
-
-        # alb_user_pool_client = cognito.UserPoolClient(
-        #     self,
-        #     "AgentUserPoolClient",
-        #     user_pool=user_pool,
-        #     generate_secret=True,  # Required for ALB integration
-        #     auth_flows=cognito.AuthFlow(user_password=True),
-        #     o_auth=cognito.OAuthSettings(
-        #         flows=cognito.OAuthFlows(authorization_code_grant=True),
-        #         scopes=[
-        #             cognito.OAuthScope.OPENID, # Required for ALB integration
-        #             cognito.OAuthScope.EMAIL # Optional
-        #         ],
-        #         callback_urls=[f"https://{APP_NAME}-public.ericbach.dev/oauth2/idpresponse"],
-        #     ),
-        # )
-        
-        user_pool_domain = cognito.UserPoolDomain(
-            self,
-            "AgentUserPoolDomain",
-            user_pool=user_pool,
-            cognito_domain=cognito.CognitoDomainOptions(
-                domain_prefix=f"{APP_NAME}"  # Must be globally unique
-            ),
-        )
 
         # Create a target group first (before the listener)
         target_group = elbv2.ApplicationTargetGroup(
             self,
-            'AgentTargets',
+            'ALBECSTargets',
             port=8000,
             vpc=vpc,
             protocol=elbv2.ApplicationProtocol.HTTP,
@@ -419,7 +320,7 @@ class Ragbot2Stack(Stack):
 
         # Create HTTPS listener with Cognito authentication
         https_listener_https = alb.add_listener(
-            "AgentHTTPSListener",
+            "ALBHTTPSListener",
             port=443,
             certificates=[certificate],
             default_action=elbv2.ListenerAction.forward([target_group]),
@@ -433,7 +334,7 @@ class Ragbot2Stack(Stack):
 
         # Create HTTP listener that redirects to HTTPS
         http_listener_http = alb.add_listener(
-            "AgentHTTPListener",
+            "ALBHTTPListener",
             port=80,
             default_action=elbv2.ListenerAction.redirect(
                 protocol="HTTPS",
@@ -441,6 +342,10 @@ class Ragbot2Stack(Stack):
                 permanent=True
             )
         )
+
+        #
+        # Amazon API Gateway
+        #
 
         # # Create API Gateway that proxies to ALB
         # api = apigateway.RestApi(
@@ -497,70 +402,19 @@ class Ragbot2Stack(Stack):
         #     }
         # )
 
-        # Since DNS is managed by Cloudflare, we don't create Route 53 records
-        # The ALB DNS name will be output for manual DNS configuration
-        
+        #
+        # Outputs
+        #
+
         # Output the ALB DNS name for manual DNS configuration in Cloudflare
         CfnOutput(
             self,
-            "ALBDnsName",
+            "ALBDNSName",
             value=alb.load_balancer_dns_name,
             description="ALB DNS Name - Create CNAME record in Cloudflare: ragbot2-public.ericbach.dev -> this value",
-            export_name="Ragbot2ALBDnsName"
+            export_name=f"{APP_NAME}-ALB-DNS-name-{ENV_NAME}"
         )
 
-        # Output the S3 bucket name
-        CfnOutput(
-            self,
-            "S3SessionsBucketName",
-            value=sessions_bucket.bucket_name,
-            description="Sessions S3 Bucket Name",
-            export_name="Ragbot2SessionsBucketName"
-        )
-
-        # Output the S3 bucket name
-        CfnOutput(
-            self,
-            "S3BucketName",
-            value=bucket.bucket_name,
-            description="S3 Bucket Name",
-            export_name="Ragbot2SourceBucketName"
-        )
-
-        # Output the Cognito User Pool ID
-        CfnOutput(
-            self,
-            "CognitoUserPoolId",
-            value=user_pool.user_pool_id,
-            description="Cognito User Pool ID",
-            export_name="Ragbot2CognitoUserPoolId"
-        )
-
-        # Output the React App Client ID
-        CfnOutput(
-            self,
-            "CognitoReactAppClientId",
-            value=react_user_pool_client.user_pool_client_id,
-            description="Cognito React App Client ID",
-            export_name="Ragbot2CognitoReactAppClientId"
-        )
-
-        # # Output the ALB App Client ID
-        # CfnOutput(
-        #     self,
-        #     "CognitoALBAppClientId",
-        #     value=alb_user_pool_client.user_pool_client_id,
-        #     description="Cognito ALB App Client ID",
-        #     export_name="Ragbot2CognitoALBAppClientId"
-        # )
-
-        # Output the Lambda function name
-        CfnOutput(
-            self,
-            "KnowledgeBaseSyncLambdaName",
-            value=knowledge_base_sync_lambda.function_name,
-            description="Lambda function for Knowledge Base sync",
-            export_name="Ragbot2KnowledgeBaseSyncLambdaName"
-        )
+ 
 
         
