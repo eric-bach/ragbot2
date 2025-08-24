@@ -82,7 +82,7 @@ The CDK infrastructure will create 2 stacks
 
 4. The frontend is deployed with Vercel (AWS Amplify does not support streaming responses)
 
-#### Running backend agent locally
+#### Running the agent locally
 
 1. Create a `.env` file in the `/backend/agent` folder
 
@@ -111,7 +111,16 @@ The CDK infrastructure will create 2 stacks
    docker run --rm --interactive --env-file .env -v //c/Users/eric.bach/.aws:/root/.aws -p 8000:8000 ragbot-agent
    ```
 
-3. Run the frontend
+3. Create a `.env.local` file in the `/frontend` folder
+
+   ```
+   NEXT_PUBLIC_COGNITO_USER_POOL_ID=
+   NEXT_PUBLIC_COGNITO_CLIENT_ID=
+   NEXT_PUBLIC_BACKEND_URL=
+   NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+   ```
+
+4. Run the frontend
 
    ```
    cd frontend

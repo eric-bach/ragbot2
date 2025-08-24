@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Turnstile } from '@marsidev/react-turnstile';
 import { Geist, Geist_Mono } from 'next/font/google';
 
 import './globals.css';
@@ -25,7 +26,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang='en'>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <Turnstile siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ''} />
+        {children}
+      </body>
     </html>
   );
 }
