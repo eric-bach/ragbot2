@@ -24,14 +24,9 @@
 - [x] Build estimate cost list
 - [x] BUG: The first request fails unless you wait a few seconds after loading the page
 
-- [x] Fix double instances of MCP client in backend
-- [x] Clean up instructions in README
-- [x] Move MCPClientManager to separate file
-- [x] Move knowledge base sync lambda to backend
-- [x] Clean up stack and names
-
 - [] Improve the design of the initial responses before the final response is received
 - [] Add polling on UI to check when Bedrock KB sync is completed
+- [] Add support to upload images
 
 - [] Investigate Strands Observability
 - [] Investigate adding Cognito auth to ALB
