@@ -123,7 +123,12 @@ export default function RootLayout({
       const { tokens } = useTheme();
 
       return (
-        <View textAlign='center' padding={tokens.space.large} paddingTop='6rem'>
+        <View
+          textAlign='center'
+          padding={tokens.space.large}
+          paddingTop='6rem'
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+        >
           <Image alt='RAGBot 2' src='/logo.png' width={54} height={54} />
           <Heading level={4}>RAGBot 2</Heading>
         </View>

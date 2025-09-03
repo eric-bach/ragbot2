@@ -31,8 +31,6 @@ export default function Home() {
       try {
         const { userId } = await getCurrentUser();
 
-        console.log('User ID:', userId);
-
         setUserId(userId);
         setSessionId(crypto.randomUUID());
       } catch (error) {
@@ -43,13 +41,13 @@ export default function Home() {
     getSessionId();
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const clearChat = async () => {
     if (sessionId) {
@@ -98,7 +96,7 @@ export default function Home() {
     // Create assistant message immediately with thinking content to show loading state
     const assistantMessage: Message = {
       id: (Date.now() + 1).toString(),
-      content: 'RAGBot 2 is cooking...',
+      content: '',
       role: 'assistant',
       timestamp: new Date(),
       isStreaming: true, // Mark as streaming initially
@@ -122,13 +120,9 @@ export default function Home() {
         }),
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      console.log('Response ok:', response.ok);
-
       if (!response.ok) {
         // Try to get error details from the response
-        let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorMessage = `HTTP error status: ${response.status}`;
         try {
           const errorData = await response.json();
           console.error('Error response data:', errorData);
@@ -140,13 +134,16 @@ export default function Home() {
           }
         } catch (parseError) {
           console.error('Failed to parse error response as JSON:', parseError);
+
           // If parsing JSON fails, use text response
           const errorText = await response.text();
           console.error('Error response text:', errorText);
+
           if (errorText) {
             errorMessage += ` - ${errorText}`;
           }
         }
+
         throw new Error(errorMessage);
       }
 
@@ -164,17 +161,20 @@ export default function Home() {
 
           if (done) {
             console.log('Streaming complete, total chunks:', chunkCount);
-            // Mark streaming as complete
+
             setMessages((prev) =>
               prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg))
             );
+
             break;
           }
 
           if (value) {
             chunkCount++;
             const chunk = decoder.decode(value, { stream: true });
-            console.log(`Frontend received chunk ${chunkCount}, bytes: ${value.length}, content:`, chunk.substring(0, 100));
+
+            console.log(`Received chunk ${chunkCount}, bytes: ${value.length}, content:`, chunk.substring(0, 100));
+
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
@@ -230,21 +230,18 @@ export default function Home() {
   return (
     <div className='flex flex-col h-full max-w-4xl mx-auto'>
       {/* Messages Area */}
-      <div className='flex-1 overflow-y-auto px-4 py-4 space-y-4'>
+      <div className={`flex-1 px-4 py-4 space-y-4 ${messages.length > 0 ? 'overflow-y-auto' : ''}`}>
         {messages.length === 0 && (
           <div className='flex items-center justify-center h-full'>
             <div className='text-center text-muted-foreground'>
               <h2 className='text-2xl font-semibold mb-2'>Welcome to RAGBot 2</h2>
               <p>Start a conversation by typing a message below.</p>
               {toolsLoading ? (
-                <p className='text-sm mt-2 text-muted-foreground'>Loading tools in background...</p>
+                <p className='text-xs mt-2 text-muted-foreground'>Loading tools in background...</p>
               ) : (
-                <p className='text-sm mt-2'>Tools loaded: {tools.length} available</p>
+                <p className='text-xs mt-2'>Tools loaded: {tools.length} available</p>
               )}
-              {sessionId && (
-                <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId.substring(0, 8)}...</p>
-              )}
-              <p className='text-xs mt-1 text-muted-foreground'>Memory: Last 10 message pairs</p>
+              {sessionId && <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId}</p>}
             </div>
           </div>
         )}
@@ -263,13 +260,8 @@ export default function Home() {
                   <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
                   <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
                 </div>
-              ) : message.isStreaming ? (
-                <div>
-                  <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
-                  <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
-                </div>
               ) : (
-                <TabbedResponse key={message.id} content={message.content} />
+                <TabbedResponse key={message.id} message={message} />
               )}
             </div>
           </div>

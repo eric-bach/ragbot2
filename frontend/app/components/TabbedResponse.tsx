@@ -1,19 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ThumbsUp, ThumbsDown, Copy } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Copy, ChevronDown, ChevronUp, Sparkles, Link, Brain } from 'lucide-react';
 import AnimatedLogo from './AnimatedLogo';
 
-interface TabbedResponseProps {
+interface Message {
+  id: string;
   content: string;
+  role: 'user' | 'assistant';
+  timestamp: Date;
+  isStreaming?: boolean;
 }
 
-type TabType = 'answer' | 'sources' | 'steps';
+interface TabbedResponseProps {
+  message: Message;
+}
 
-export default function TabbedResponse({ content }: TabbedResponseProps) {
+export default function TabbedResponse({ message }: TabbedResponseProps) {
+  const { content } = message;
+
   // Extract all thinking content (steps) - handle multiple occurrences
   const thinkingMatches = Array.from(content.matchAll(/<thinking>([\s\S]*?)<\/thinking>/g));
   const thinkingContent = thinkingMatches
@@ -78,59 +86,73 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
 
   // Extract all response content - handle multiple occurrences
   const responseMatches = Array.from(content.matchAll(/<response>([\s\S]*?)<\/response>/g));
-  const answerContent =
+  const structuredAnswerContent =
     responseMatches.length > 0
       ? responseMatches
           .map((match) => match[1].trim())
           .filter((content) => content.length > 0)
           .join('\n\n')
-      : content
-          .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
-          .replace(/<sources>[\s\S]*?<\/sources>/g, '')
-          .trim();
+      : '';
 
-  // Check if we're in a streaming state (content is being built up)
-  // Show streaming only when there's thinking content but no response content at all
-  const hasResponseContent =
-    content.includes('<response>') ||
-    (content.includes('<thinking>') &&
-      !content.includes('<response>') &&
-      content
-        .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
-        .replace(/<sources>[\s\S]*?<\/sources>/g, '')
-        .trim().length > 0);
+  // For answer content, show structured content if available, otherwise show raw content
+  // When streaming, show raw content if no structured content exists yet
+  const cleanContent = content
+    .replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
+    .replace(/<sources>[\s\S]*?<\/sources>/g, '')
+    .replace(/<response>[\s\S]*?<\/response>/g, '')
+    .trim();
 
-  const isStreaming = content.includes('<thinking>') && !hasResponseContent && thinkingContent;
+  const answerContent = structuredAnswerContent || cleanContent;
 
-  const tabs = [
-    {
-      id: 'answer' as TabType,
-      label: 'Answer',
-      content: answerContent,
-      disabled: !answerContent && !isStreaming, // Never disable Answer tab during streaming
-    },
-    {
-      id: 'sources' as TabType,
-      label: 'Sources',
-      content: sourcesContent,
-      disabled: !sourcesContent,
-    },
-    {
-      id: 'steps' as TabType,
-      label: 'Steps',
-      content: thinkingContent,
-      disabled: !thinkingContent,
-    },
-  ];
+  // Use the isStreaming property from the message instead of calculating it
+  const isStreaming = message.isStreaming || false;
 
-  const [activeTab, setActiveTab] = useState<TabType>('answer');
+  // State for managing collapsible sections
+  const [expandedSections, setExpandedSections] = useState({
+    thinking: true, // Start expanded during streaming
+    sources: false, // Start collapsed
+  });
+
+  // Collapse thinking section when streaming completes
+  useEffect(() => {
+    if (!isStreaming) {
+      setExpandedSections((prev) => ({
+        ...prev,
+        thinking: false,
+      }));
+    }
+  }, [isStreaming]);
+
+  // Toggle section expansion
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
 
   // Copy text functionality
   const handleCopyText = async () => {
-    const currentTab = tabs.find((tab) => tab.id === activeTab);
-    if (currentTab && currentTab.content) {
+    let textToCopy = '';
+
+    if (isStreaming) {
+      // When streaming, copy the current content (thinking + answer)
+      const parts = [];
+      if (thinkingContent) parts.push(`**Thinking:**\n${thinkingContent}`);
+      if (answerContent) parts.push(`**Response:**\n${answerContent}`);
+      textToCopy = parts.join('\n\n') || content;
+    } else {
+      // When not streaming, copy all available content
+      const parts = [];
+      if (answerContent) parts.push(`**Response:**\n${answerContent}`);
+      if (sourcesContent) parts.push(`**Sources:**\n${sourcesContent}`);
+      if (thinkingContent) parts.push(`**Thinking:**\n${thinkingContent}`);
+      textToCopy = parts.join('\n\n');
+    }
+
+    if (textToCopy) {
       try {
-        await navigator.clipboard.writeText(currentTab.content);
+        await navigator.clipboard.writeText(textToCopy);
         // You could add a toast notification here if desired
       } catch (err) {
         console.error('Failed to copy text: ', err);
@@ -149,38 +171,35 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
     console.log('Thumbs down clicked');
   };
 
-  return (
-    <div className='w-full'>
-      {/* Tab Navigation */}
-      <div className='flex border-b border-border mb-4'>
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            disabled={tab.disabled}
-            className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            } ${tab.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-            {tab.id === 'sources' && (
-              <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'>
-                <circle cx='12' cy='12' r='3' />
-                <path d='M12 1v6m0 6v6' />
-                <path d='M3 12h6m6 0h6' />
-              </svg>
-            )}
-            {tab.id === 'steps' && (
-              <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'>
-                <path d='M5 12h14' />
-                <path d='M12 5l7 7-7 7' />
-              </svg>
-            )}
-            <span>{tab.label}</span>
-            {/* Show streaming indicator on Steps tab when thinking */}
-            {tab.id === 'steps' && isStreaming && (
-              <div className='flex space-x-1'>
+  // Collapsible section component
+  const CollapsibleSection = ({
+    title,
+    content,
+    isExpanded,
+    onToggle,
+    icon,
+    isStreaming: sectionStreaming = false,
+  }: {
+    title: string;
+    content: string;
+    isExpanded: boolean;
+    onToggle: () => void;
+    icon?: React.ReactNode;
+    isStreaming?: boolean;
+  }) => {
+    if (!content && !sectionStreaming) return null;
+
+    return (
+      <div className='mb-4'>
+        <button
+          onClick={onToggle}
+          className='flex items-center justify-between w-full text-left text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-2'
+        >
+          <div className='flex items-center space-x-2'>
+            {icon}
+            <span>{title}</span>
+            {sectionStreaming && (
+              <div className='flex space-x-1 ml-2'>
                 <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'></div>
                 <div
                   className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
@@ -192,72 +211,109 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
                 ></div>
               </div>
             )}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab Content */}
-      <div className='min-h-[100px]'>
-        {tabs.map((tab) => (
-          <div key={tab.id} className={`${activeTab === tab.id ? 'block' : 'hidden'}`}>
-            {tab.content ? (
-              <div className='prose prose-sm max-w-none whitespace-pre-wrap break-words'>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{tab.content}</ReactMarkdown>
-              </div>
-            ) : (
-              <div className='text-muted-foreground text-sm'>
-                {tab.id === 'answer' && !hasResponseContent && isStreaming ? (
-                  <div className='flex items-center space-x-2 text-sm text-muted-foreground'>
-                    <Image
-                      src='/logo.png'
-                      alt='RAGBot Logo'
-                      className='w-4 h-4 animate-bounce'
-                      style={{ animationDelay: '-0.3s' }}
-                      width={6}
-                      height={6}
-                    />
-                    <AnimatedLogo text='RAGBot 2' isAnimating={true} size='sm' />
-                    <span>is cooking...</span>
-                  </div>
-                ) : tab.id === 'answer' ? (
-                  'No answer content available'
-                ) : tab.id === 'sources' ? (
-                  'No sources available'
-                ) : (
-                  'No steps available'
-                )}
-              </div>
-            )}
           </div>
-        ))}
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+
+        {isExpanded && (
+          <div className='mt-2 border-l-2 border-muted pl-3'>
+            {content ? (
+              <div className='prose prose-sm max-w-none whitespace-pre-wrap break-words'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+              </div>
+            ) : sectionStreaming ? (
+              <div className='text-muted-foreground text-sm italic'>Waiting for content...</div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className='w-full'>
+      {/* Show cooking animation when streaming */}
+      {isStreaming && (
+        <div className='flex items-center space-x-2 text-sm text-muted-foreground pt-2 mb-4'>
+          <Image
+            src='/logo.png'
+            alt='RAGBot Logo'
+            className='w-4 h-4 animate-bounce'
+            style={{ animationDelay: '-0.3s' }}
+            width={6}
+            height={6}
+          />
+          <AnimatedLogo text='RAGBot 2' isAnimating={true} size='sm' />
+          <span>is cooking...</span>
+        </div>
+      )}
+
+      {/* Collapsible Sections */}
+      <div className='min-h-[100px]'>
+        {/* Thinking Section */}
+        <CollapsibleSection
+          title='Thinking'
+          content={thinkingContent}
+          isExpanded={expandedSections.thinking}
+          onToggle={() => toggleSection('thinking')}
+          isStreaming={isStreaming && !answerContent} // Show streaming when thinking but no answer yet
+          icon={<Brain width={18} height={18} />}
+        />
+
+        {/* Response Section - Always expanded, not collapsible */}
+        {answerContent && (
+          <div className='mb-4'>
+            <div className='flex items-center space-x-2 text-md text-muted-foreground hover:text-foreground py-2'>
+              <Sparkles width={18} height={18} />
+              <span>Response</span>
+            </div>
+
+            <div className='border-l-2 border-muted pl-3'>
+              <div className='prose prose-sm max-w-none whitespace-pre-wrap break-words'>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{answerContent}</ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sources Section */}
+        <CollapsibleSection
+          title={`Sources (${sourcesMatches.length})`}
+          content={sourcesContent}
+          isExpanded={expandedSections.sources}
+          onToggle={() => toggleSection('sources')}
+          icon={<Link width={18} height={18} />}
+        />
       </div>
 
       {/* Feedback Buttons */}
       <div className='flex items-center justify-between mt-2 pt-2 border-t border-border'>
-        <div className='text-xs opacity-70'>{new Date().toLocaleTimeString()}</div>
-        <div className='flex items-center space-x-1'>
-          <button
-            onClick={handleThumbsUp}
-            className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
-            title='Thumbs up'
-          >
-            <ThumbsUp size={14} className='transition-colors duration-200 hover:text-primary' />
-          </button>
-          <button
-            onClick={handleThumbsDown}
-            className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
-            title='Thumbs down'
-          >
-            <ThumbsDown size={14} className='transition-colors duration-200 hover:text-primary' />
-          </button>
-          <button
-            onClick={handleCopyText}
-            className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
-            title='Copy text'
-          >
-            <Copy size={14} className='transition-colors duration-200 hover:text-primary' />
-          </button>
-        </div>
+        <div className='text-xs opacity-70'>{message.timestamp.toLocaleTimeString()}</div>
+        {!isStreaming && (
+          <div className='flex items-center space-x-1'>
+            <button
+              onClick={handleThumbsUp}
+              className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
+              title='Thumbs up'
+            >
+              <ThumbsUp size={14} className='transition-colors duration-200 hover:text-primary' />
+            </button>
+            <button
+              onClick={handleThumbsDown}
+              className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
+              title='Thumbs down'
+            >
+              <ThumbsDown size={14} className='transition-colors duration-200 hover:text-primary' />
+            </button>
+            <button
+              onClick={handleCopyText}
+              className='p-1.5 hover:bg-muted rounded transition-all duration-200 cursor-pointer hover:scale-105'
+              title='Copy text'
+            >
+              <Copy size={14} className='transition-colors duration-200 hover:text-primary' />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
