@@ -159,9 +159,7 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
             onClick={() => setActiveTab(tab.id)}
             disabled={tab.disabled}
             className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+              activeTab === tab.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
             } ${tab.disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
             {tab.id === 'sources' && (
@@ -182,14 +180,8 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
             {tab.id === 'steps' && isStreaming && (
               <div className='flex space-x-1'>
                 <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'></div>
-                <div
-                  className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
-                  style={{ animationDelay: '0.2s' }}
-                ></div>
-                <div
-                  className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
-                  style={{ animationDelay: '0.4s' }}
-                ></div>
+                <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse' style={{ animationDelay: '0.2s' }}></div>
+                <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse' style={{ animationDelay: '0.4s' }}></div>
               </div>
             )}
           </button>
@@ -208,14 +200,7 @@ export default function TabbedResponse({ content }: TabbedResponseProps) {
               <div className='text-muted-foreground text-sm'>
                 {tab.id === 'answer' && !hasResponseContent && isStreaming ? (
                   <div className='flex items-center space-x-2 text-sm text-muted-foreground'>
-                    <Image
-                      src='/logo.png'
-                      alt='RAGBot Logo'
-                      className='w-4 h-4 animate-bounce'
-                      style={{ animationDelay: '-0.3s' }}
-                      width={6}
-                      height={6}
-                    />
+                    <Image src='/logo.png' alt='RAGBot Logo' className='w-4 h-4 animate-bounce' style={{ animationDelay: '-0.3s' }} width={6} height={6} />
                     <AnimatedLogo text='RAGBot 2' isAnimating={true} size='sm' />
                     <span>is cooking...</span>
                   </div>

@@ -165,9 +165,7 @@ export default function Home() {
           if (done) {
             console.log('Streaming complete, total chunks:', chunkCount);
             // Mark streaming as complete
-            setMessages((prev) =>
-              prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg))
-            );
+            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg)));
             break;
           }
 
@@ -178,11 +176,7 @@ export default function Home() {
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent, isStreaming: true } : msg
-              )
-            );
+            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent, isStreaming: true } : msg)));
           }
         }
       } else {
@@ -200,11 +194,7 @@ export default function Home() {
       }
 
       // Update the existing assistant message with error content
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessage.id ? { ...msg, content: errorContent, isStreaming: false } : msg
-        )
-      );
+      setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent, isStreaming: false } : msg)));
     } finally {
       setIsLoading(false);
     }
@@ -230,21 +220,18 @@ export default function Home() {
   return (
     <div className='flex flex-col h-full max-w-4xl mx-auto'>
       {/* Messages Area */}
-      <div className='flex-1 overflow-y-auto px-4 py-4 space-y-4'>
+      <div className={`flex-1 px-4 py-4 space-y-4 ${messages.length > 0 ? 'overflow-y-auto' : ''}`}>
         {messages.length === 0 && (
           <div className='flex items-center justify-center h-full'>
             <div className='text-center text-muted-foreground'>
               <h2 className='text-2xl font-semibold mb-2'>Welcome to RAGBot 2</h2>
               <p>Start a conversation by typing a message below.</p>
               {toolsLoading ? (
-                <p className='text-sm mt-2 text-muted-foreground'>Loading tools in background...</p>
+                <p className='text-xs mt-2 text-muted-foreground'>Loading tools in background...</p>
               ) : (
-                <p className='text-sm mt-2'>Tools loaded: {tools.length} available</p>
+                <p className='text-xs mt-2'>Tools loaded: {tools.length} available</p>
               )}
-              {sessionId && (
-                <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId.substring(0, 8)}...</p>
-              )}
-              <p className='text-xs mt-1 text-muted-foreground'>Memory: Last 10 message pairs</p>
+              {sessionId && <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId}</p>}
             </div>
           </div>
         )}
@@ -253,9 +240,7 @@ export default function Home() {
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-primary text-primary-foreground ml-auto'
-                  : 'bg-muted text-muted-foreground'
+                message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-muted-foreground'
               }`}
             >
               {message.role === 'user' ? (
