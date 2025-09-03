@@ -31,8 +31,6 @@ export default function Home() {
       try {
         const { userId } = await getCurrentUser();
 
-        console.log('User ID:', userId);
-
         setUserId(userId);
         setSessionId(crypto.randomUUID());
       } catch (error) {
@@ -43,13 +41,13 @@ export default function Home() {
     getSessionId();
   }, []);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const clearChat = async () => {
     if (sessionId) {
@@ -98,7 +96,7 @@ export default function Home() {
     // Create assistant message immediately with thinking content to show loading state
     const assistantMessage: Message = {
       id: (Date.now() + 1).toString(),
-      content: 'RAGBot 2 is cooking...',
+      content: '',
       role: 'assistant',
       timestamp: new Date(),
       isStreaming: true, // Mark as streaming initially
@@ -122,13 +120,9 @@ export default function Home() {
         }),
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      console.log('Response ok:', response.ok);
-
       if (!response.ok) {
         // Try to get error details from the response
-        let errorMessage = `HTTP error! status: ${response.status}`;
+        let errorMessage = `HTTP error status: ${response.status}`;
         try {
           const errorData = await response.json();
           console.error('Error response data:', errorData);
@@ -140,13 +134,16 @@ export default function Home() {
           }
         } catch (parseError) {
           console.error('Failed to parse error response as JSON:', parseError);
+
           // If parsing JSON fails, use text response
           const errorText = await response.text();
           console.error('Error response text:', errorText);
+
           if (errorText) {
             errorMessage += ` - ${errorText}`;
           }
         }
+
         throw new Error(errorMessage);
       }
 
@@ -164,19 +161,28 @@ export default function Home() {
 
           if (done) {
             console.log('Streaming complete, total chunks:', chunkCount);
-            // Mark streaming as complete
-            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg)));
+
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg))
+            );
+
             break;
           }
 
           if (value) {
             chunkCount++;
             const chunk = decoder.decode(value, { stream: true });
-            console.log(`Frontend received chunk ${chunkCount}, bytes: ${value.length}, content:`, chunk.substring(0, 100));
+
+            console.log(`Received chunk ${chunkCount}, bytes: ${value.length}, content:`, chunk.substring(0, 100));
+
             accumulatedContent += chunk;
 
             // Update the assistant message content in real-time
-            setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent, isStreaming: true } : msg)));
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessage.id ? { ...msg, content: accumulatedContent, isStreaming: true } : msg
+              )
+            );
           }
         }
       } else {
@@ -194,7 +200,11 @@ export default function Home() {
       }
 
       // Update the existing assistant message with error content
-      setMessages((prev) => prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, content: errorContent, isStreaming: false } : msg)));
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessage.id ? { ...msg, content: errorContent, isStreaming: false } : msg
+        )
+      );
     } finally {
       setIsLoading(false);
     }
@@ -240,7 +250,9 @@ export default function Home() {
           <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div
               className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
-                message.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted text-muted-foreground'
+                message.role === 'user'
+                  ? 'bg-primary text-primary-foreground ml-auto'
+                  : 'bg-muted text-muted-foreground'
               }`}
             >
               {message.role === 'user' ? (
@@ -248,13 +260,8 @@ export default function Home() {
                   <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
                   <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
                 </div>
-              ) : message.isStreaming ? (
-                <div>
-                  <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
-                  <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
-                </div>
               ) : (
-                <TabbedResponse key={message.id} content={message.content} />
+                <TabbedResponse key={message.id} message={message} />
               )}
             </div>
           </div>
