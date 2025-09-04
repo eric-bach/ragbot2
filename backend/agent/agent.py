@@ -51,7 +51,7 @@ load_dotenv()
 AWS_REGION = os.getenv('AWS_REGION', 'us-west-2') # Used by the Bedrock model
 BEDROCK_MODEL_ID = os.getenv('BEDROCK_MODEL_ID') 
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID') # Used by the retrieve tool
-SESSIONS_BUCKET_NAME = os.getenv('SESSIONS_BUCKET_NAME') # Used by Strands Agent sessions
+DATA_BUCKET_NAME = os.getenv('DATA_BUCKET_NAME') # Used by Strands Agent sessions
 KNOWLEDGE_SOURCE_BUCKET_NAME = os.getenv('KNOWLEDGE_SOURCE_BUCKET_NAME') # Used by the presigned-url endpoint
 LINKUP_API_KEY = os.getenv('LINKUP_API_KEY') # Used by the web_search tool
 
@@ -85,7 +85,7 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
     with conversation management"""
     session_manager = S3SessionManager(
         session_id=session_id,
-        bucket=SESSIONS_BUCKET_NAME,
+        bucket=DATA_BUCKET_NAME,
         prefix=f"sessions/user_{user_id}",
         boto_session=session,
         region_name=AWS_REGION
@@ -158,7 +158,7 @@ def health():
         "STATUS": "healthy",
         "AWS_REGION": AWS_REGION,
         "KNOWLEDGE_BASE_ID": KNOWLEDGE_BASE_ID,
-        "SESSIONS_BUCKET_NAME": SESSIONS_BUCKET_NAME,
+        "DATA_BUCKET_NAME": DATA_BUCKET_NAME,
         "KNOWLEDGE_SOURCE_BUCKET_NAME": KNOWLEDGE_SOURCE_BUCKET_NAME,
         "LINKUP_API_KEY": f"***{LINKUP_API_KEY[-3:]}",
     }
@@ -285,11 +285,11 @@ async def delete_session(user_id: str, session_id: str):
     prefix = f"sessions/user_{user_id}/session_{session_id}/"
     try:
         # List all objects under just the target session folder
-        response = s3.list_objects_v2(Bucket=SESSIONS_BUCKET_NAME, Prefix=prefix)
+        response = s3.list_objects_v2(Bucket=DATA_BUCKET_NAME, Prefix=prefix)
         if 'Contents' in response:
             objects_to_delete = [{'Key': obj['Key']} for obj in response['Contents']]
             s3.delete_objects(
-                Bucket=SESSIONS_BUCKET_NAME,
+                Bucket=DATA_BUCKET_NAME,
                 Delete={'Objects': objects_to_delete}
             )
             return {"message": f"Deleted {len(objects_to_delete)} objects in session {session_id}"}

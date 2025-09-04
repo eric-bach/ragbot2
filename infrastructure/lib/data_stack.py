@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 class DataStackResources:
     vpc: ec2.Vpc
     knowledge_source_bucket_arn: str
-    sessions_bucket_arn: str
+    data_bucket_arn: str
 
 class DataStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, app_name: str, env_name: str, **kwargs) -> None:
@@ -45,11 +45,11 @@ class DataStack(Stack):
         # Amazon S3
         # 
 
-        # Add S3 bucket for Strands Agent sessions
-        sessions_bucket = s3.Bucket(
+        # Add S3 bucket for Strands Agent sessions and MCP config
+        data_bucket = s3.Bucket(
             self,
-            "SessionsBucket",
-            bucket_name=f"{APP_NAME}-sessions-{ENV_NAME}",
+            "DataBucket",
+            bucket_name=f"{APP_NAME}-data-{ENV_NAME}",
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
             versioned=True,
@@ -185,10 +185,10 @@ class DataStack(Stack):
 
         CfnOutput(
             self,
-            "SessionsBucketName",
-            value=sessions_bucket.bucket_name,
-            description=f"{APP_NAME} Sessions Bucket Name",
-            export_name=f"{APP_NAME}-sessions-bucket-name"
+            "DataBucketName",
+            value=data_bucket.bucket_name,
+            description=f"{APP_NAME} Data Bucket Name",
+            export_name=f"{APP_NAME}-data-bucket-name"
         )
 
         CfnOutput(
@@ -232,5 +232,5 @@ class DataStack(Stack):
         self.resources = DataStackResources(
             vpc=vpc,
             knowledge_source_bucket_arn=knowledge_source_bucket.bucket_arn,
-            sessions_bucket_arn=sessions_bucket.bucket_arn
+            data_bucket_arn=data_bucket.bucket_arn
         )

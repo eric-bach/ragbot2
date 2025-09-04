@@ -46,10 +46,10 @@ class AppStack(Stack):
             "KnowledgeSourceBucket",
             bucket_arn=data_resources.knowledge_source_bucket_arn
         )
-        sessions_bucket = s3.Bucket.from_bucket_arn(
+        data_bucket = s3.Bucket.from_bucket_arn(
             self,
-            "SessionsBucket", 
-            bucket_arn=data_resources.sessions_bucket_arn
+            "DataBucket", 
+            bucket_arn=data_resources.data_bucket_arn
         )
 
         #
@@ -191,7 +191,7 @@ class AppStack(Stack):
                 ],
                 resources=[
                     f"{knowledge_source_bucket.bucket_arn}/*",
-                    f"{sessions_bucket.bucket_arn}/*",
+                    f"{data_bucket.bucket_arn}/*",
                 ],
             )
         )
@@ -202,7 +202,7 @@ class AppStack(Stack):
                 ],
                 resources=[
                     f"{knowledge_source_bucket.bucket_arn}",
-                    f"{sessions_bucket.bucket_arn}",
+                    f"{data_bucket.bucket_arn}",
                 ],
             )
         )
@@ -254,7 +254,7 @@ class AppStack(Stack):
                 "KNOWLEDGE_BASE_ID": KNOWLEDGE_BASE_ID,
                 "KNOWLEDGE_BASE_DATA_SOURCE_ID": KNOWLEDGE_BASE_DATA_SOURCE_ID,
                 "KNOWLEDGE_SOURCE_BUCKET_NAME": knowledge_source_bucket.bucket_name,
-                "SESSIONS_BUCKET_NAME": sessions_bucket.bucket_name,
+                "DATA_BUCKET_NAME": data_bucket.bucket_name,
                 "LINKUP_API_KEY": LINKUP_API_KEY,
             },
             port_mappings=[
