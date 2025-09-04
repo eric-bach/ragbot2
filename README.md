@@ -23,10 +23,18 @@ This is an intelligent RAG (Retrieval-Augmented Generation) chatbot that combine
 - **AWS Documentation**: Access comprehensive AWS service documentation
 - **Multi-Model Support**: Uses Amazon Nova Micro for efficient processing
 
+### MCP Server Configuration 🆕
+
+- **Custom MCP Servers**: Users can configure their own Model Context Protocol servers
+- **Template Library**: Predefined templates for GitHub, filesystem, web search, and more
+- **User-Specific Storage**: Each user's MCP configurations are stored securely in S3
+- **Fallback Support**: Automatically falls back to AWS documentation if no custom servers configured
+
 ### ChatBot
 
 - **User Session Management**: Uses Strands Agents to manage user conversation sessions
 - **Streaming Responses**: Fully streaming of chat responses to user
+- **Tool Selection** 🆕: Users can explicitly select which tools the agent should use for queries
 
 ## Architecture
 
@@ -233,6 +241,40 @@ Estimated monthly costs (USD) for running in an AWS account:
 - The agent preserves your original questions when querying the knowledge base
 - Automatic container cleanup prevents Docker resource leaks
 - Results are optimized for AI agent consumption and human readability
+
+## MCP Server Configuration
+
+Users can now configure their own Model Context Protocol (MCP) servers in addition to the default AWS documentation server. See [MCP Configuration Guide](docs/MCP_CONFIGURATION.md) for detailed instructions.
+
+### Quick Start
+
+1. Click the "MCP Servers" button in the chat interface
+2. Choose from predefined templates or create custom configurations
+3. Save configurations to make them available in new chat sessions
+
+### Supported MCP Servers
+
+- **AWS Documentation** (default) - Official AWS documentation
+- **GitHub** - Repository operations (requires GitHub token)
+- **Filesystem** - File system operations
+- **Web Search** - Brave search integration (requires API key)
+- **Custom** - Any MCP-compatible server
+
+## Tool Selection
+
+Users can now explicitly control which tools the AI agent uses for each query:
+
+1. **Tool Selector Button**: Click the "Tools" button in the chat interface to open the tool selection modal
+2. **Selective Usage**: Choose specific tools (e.g., only web search, only AWS documentation)
+3. **All Tools Mode**: Leave no tools selected to use all available tools (default behavior)
+4. **Visual Indicators**: Tools are color-coded by source (AWS=orange, MCP=purple, Base=blue)
+
+This allows users to:
+
+- Force the agent to use only web search for real-time information
+- Restrict queries to only local knowledge base content
+- Use only specific MCP servers for specialized tasks
+- Experiment with different tool combinations
 
 ## Architecture
 

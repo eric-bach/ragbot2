@@ -2,16 +2,17 @@ import os
 import boto3
 import logging
 import json
+from typing import List, Dict, Optional
 from botocore.config import Config
 from dotenv import load_dotenv
 from strands import Agent
-from strands_tools import http_request, retrieve
+from strands_tools import current_time, retrieve
 from strands.models import BedrockModel
 from strands.tools.mcp import MCPClient
 from strands.session.s3_session_manager import S3SessionManager
 from strands.agent.conversation_manager import SummarizingConversationManager, SlidingWindowConversationManager
 from tools.web_search import web_search
-from mcp_client_manager import MCPClientManager
+from mcp_client_manager import MCPClientManager, MCPServerConfig
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,7 +42,7 @@ async def startup_event():
     """Initialize MCP client on startup"""
     try:
         logger.info("Initializing MCP client on startup...")
-        mcp_manager.get_client()
+        mcp_manager.get_client()  # Initialize default client
         logger.info("MCP client initialized successfully on startup")
     except Exception as e:
         logger.warning(f"Failed to initialize MCP client on startup: {e}")
@@ -72,15 +73,23 @@ bedrock_model = BedrockModel(
     boto_session=session
 )
 
-# Global MCP client manager
-mcp_manager = MCPClientManager()
+# Global MCP client manager with S3 support
+mcp_manager = MCPClientManager(s3_client=s3, sessions_bucket_name=SESSIONS_BUCKET_NAME)
 
 class ChatRequest(BaseModel):
     session_id: str
     user_id: str
     query: str
+    selected_tools: Optional[List[str]] = None  # List of tool names to use exclusively
 
-def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient) -> Agent:
+class MCPServerConfigRequest(BaseModel):
+    name: str
+    command: str
+    args: List[str]
+    env: Optional[Dict[str, str]] = None
+    description: str = ""
+
+def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient, selected_tools: Optional[List[str]] = None) -> Agent:
     """Builds and returns a Strands Agent to a persistent session in S3 
     with conversation management"""
     session_manager = S3SessionManager(
@@ -94,13 +103,72 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
         window_size=10
     )
     
-    tools = mcp_client.list_tools_sync() + [web_search, http_request, retrieve]
+    # Get all available tools
+    all_tools = mcp_client.list_tools_sync() + [web_search, current_time, retrieve]
+    
+    # Filter tools if specific tools are selected
+    if selected_tools:
+        # Create a map of tool names to tools for easy lookup
+        tool_map = {}
+        
+        # Map base tools
+        for tool in [web_search, current_time, retrieve]:
+            if hasattr(tool, 'tool_name'):
+                tool_map[tool.tool_name] = tool
+            elif hasattr(tool, '__name__'):
+                tool_map[tool.__name__] = tool
+        
+        # Map MCP tools
+        for tool in mcp_client.list_tools_sync():
+            tool_map[tool.tool_name] = tool
+        
+        # Select only the requested tools
+        tools = [tool_map[tool_name] for tool_name in selected_tools if tool_name in tool_map]
+        
+        # If no valid tools found, fall back to all tools
+        if not tools:
+            logger.warning(f"No valid tools found from selection {selected_tools}, using all tools")
+            tools = all_tools
+    else:
+        tools = all_tools
 
-    logger.debug("tools", tools)
+    logger.debug("selected tools", [getattr(tool, 'tool_name', getattr(tool, '__name__', str(tool))) for tool in tools])
 
-    return Agent(
-        agent_id="ragbot2",
-        system_prompt="""
+    # Update system prompt based on selected tools
+    if selected_tools:
+        tool_names = [getattr(tool, 'tool_name', getattr(tool, '__name__', str(tool))) for tool in tools]
+        system_prompt = f"""
+        You are an AI assistant that has been instructed to use ONLY the following specific tools: {', '.join(tool_names)}.
+        
+        **Instructions:**
+        - You MUST ONLY use the tools that have been specifically selected: {', '.join(tool_names)}
+        - For EVERY user query, you MUST call and use at least one of the selected tools.
+        - NEVER answer based solely on your own knowledge, even if you think you know the answer.
+        - Only answer after reviewing results from the selected tools.
+        - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
+            - <thinking>: Explain your approach, reasoning, and tool choices from the selected tools.
+            - <response>: Provide a clear, human-readable answer.
+            - <sources>: List ALL tool outputs and/or sources used.
+        - Do NOT output anything except these three tags.
+        - Respond in a friendly, Albertan tone.
+        
+        **Example valid output:**
+        <thinking>
+        I used {tool_names[0] if tool_names else 'the selected tool'} because it was specifically chosen for this query.
+        </thinking>
+
+        <response>
+        Here is the answer to your question based on the selected tools...
+        </response>
+
+        <sources>
+        - {tool_names[0] if tool_names else 'selected_tool'}: [tool output summary]
+        </sources>
+
+        Always follow this response structure and do NOT skip tool calls, otherwise your response is considered invalid.
+        """
+    else:
+        system_prompt = """
         You are an AI assistant that helps users answer any type of questions with three essential tools:
             - Web search using LinkUp API (web_search)
             - AWS documentation (MCP tools)
@@ -140,7 +208,11 @@ def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient
         </sources>
 
         Always follow this response structure and do NOT skip tool calls, otherwise your response is considered invalid.
-        """,
+        """
+
+    return Agent(
+        agent_id="ragbot2",
+        system_prompt=system_prompt,
         tools=tools,
         model=bedrock_model,
         session_manager=session_manager,
@@ -160,15 +232,17 @@ def health():
         "KNOWLEDGE_BASE_ID": KNOWLEDGE_BASE_ID,
         "SESSIONS_BUCKET_NAME": SESSIONS_BUCKET_NAME,
         "KNOWLEDGE_SOURCE_BUCKET_NAME": KNOWLEDGE_SOURCE_BUCKET_NAME,
-        "LINKUP_API_KEY": f"***{LINKUP_API_KEY[-3:]}",
+        "LINKUP_API_KEY": f"***{LINKUP_API_KEY[-3:]}" if LINKUP_API_KEY else "None",
     }
 
 @app.get("/tools")
-def get_tools():
+def get_tools(user_id: str = Query(None, description="User ID to get user-specific tools")):
     """Get list of available tools for the AI agent"""
     import time
     
-    base_tools = [web_search, http_request, retrieve]
+    logger.info(f"Getting tools for user: {user_id}")
+    
+    base_tools = [web_search, current_time, retrieve]
     tools_info = []
 
     for tool in base_tools:
@@ -176,7 +250,7 @@ def get_tools():
             # For custom tools (web_search)
             if hasattr(tool, 'tool_name'):
                 tool_name = tool.tool_name
-            # For strands tools (http_request, retrieve)
+            # For strands tools (retrieve, current_time)
             elif hasattr(tool, '__name__'):
                 tool_name = tool.__name__
             else:
@@ -197,40 +271,49 @@ def get_tools():
         except Exception as e:
             logger.warning(f"Could not process strands tool {tool}: {e}")
 
-    # Add AWS tools with retry logic
+    # Add MCP tools with retry logic
     max_retries = 3
     retry_delay = 1
     
     for attempt in range(max_retries):
         try:
-            aws_documentation_mcp_client = mcp_manager.get_client()
-            with aws_documentation_mcp_client:  
-                aws_tools = aws_documentation_mcp_client.list_tools_sync()
-                
-                for tool in aws_tools:
-                    try:
-                        # Get the tool name, description, and source
-                        tool_name = tool.tool_name
-                        description = tool.tool_spec["description"].strip().split('\n')[0]
-                        source = "aws"
+            logger.info(f"Attempt {attempt + 1}: Getting MCP client for user {user_id}")
+            mcp_client = mcp_manager.get_client(user_id)  # Get user-specific or default client
+            logger.info(f"Got MCP client: {mcp_client is not None}")
+            
+            if mcp_client:
+                logger.info(f"Connecting to MCP client to list tools...")
+                with mcp_client:  
+                    mcp_tools = mcp_client.list_tools_sync()
+                    logger.info(f"Found {len(mcp_tools)} MCP tools")
+                    
+                    for tool in mcp_tools:
+                        try:
+                            # Get the tool name, description, and source
+                            tool_name = tool.tool_name
+                            description = tool.tool_spec["description"].strip().split('\n')[0]
+                            source = "user_mcp" if user_id else "aws"
+                            
+                            logger.info(f"Adding MCP tool: {tool_name} (source: {source})")
+                            
 
-                        tools_info.append({
-                            "name": tool_name,
-                            "description": description,
-                            "source": source
-                        })
-                    except Exception as e:
-                        logger.warning(f"Could not process AWS tool {tool}: {e}")
+                            tools_info.append({
+                                "name": tool_name,
+                                "description": description,
+                                "source": source
+                            })
+                        except Exception as e:
+                            logger.warning(f"Could not process MCP tool {tool}: {e}")
             break  # Success, exit retry loop
             
         except Exception as e:
-            logger.warning(f"Attempt {attempt + 1} failed to get AWS tools: {e}")
+            logger.warning(f"Attempt {attempt + 1} failed to get MCP tools: {e}")
             if attempt < max_retries - 1:
                 logger.info(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
             else:
-                logger.error("Failed to get AWS tools after all retries")
+                logger.error("Failed to get MCP tools after all retries")
 
     return {
         "tools": tools_info,
@@ -307,32 +390,35 @@ async def chat(request: ChatRequest):
     if not request.user_id:
         raise HTTPException(status_code=400, detail="No user_id provided")
 
-    async def generate(session_id: str, user_id: str, query: str):
-        aws_documentation_mcp_client = mcp_manager.get_client()
+    async def generate(session_id: str, user_id: str, query: str, selected_tools: Optional[List[str]] = None):
+        mcp_client = mcp_manager.get_client(user_id)  # Get user-specific client
         
-        with aws_documentation_mcp_client:
-            agent = build_agent_for_session(session_id, user_id, mcp_client=aws_documentation_mcp_client)
+        if mcp_client:
+            with mcp_client:
+                agent = build_agent_for_session(session_id, user_id, mcp_client=mcp_client, selected_tools=selected_tools)
 
-            try:
-                agent_stream = agent.stream_async(query)
-                
-                chunk_count = 0
-                async for event in agent_stream:
-                    if "data" in event:
-                        # Only stream text chunks to the client
-                        chunk_count += 1
-                        if chunk_count % 60 == 0:  # Log every 60th chunk
-                            logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
-                        yield event['data']
-                logger.info(f"Streaming response complete - total chunks: {chunk_count}")
-            except Exception as e:
-                logger.error(f"Error in agent stream: {str(e)}")
-                yield f"Error: {str(e)}"
+                try:
+                    agent_stream = agent.stream_async(query)
+                    
+                    chunk_count = 0
+                    async for event in agent_stream:
+                        if "data" in event:
+                            # Only stream text chunks to the client
+                            chunk_count += 1
+                            if chunk_count % 60 == 0:  # Log every 60th chunk
+                                logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
+                            yield event['data']
+                    logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+                except Exception as e:
+                    logger.error(f"Error in agent stream: {str(e)}")
+                    yield f"Error: {str(e)}"
+        else:
+            yield f"Error: No MCP client available for user {user_id}"
 
-    logger.info(f"Chat request received: session_id={request.session_id}, query={request.query}, user_id={request.user_id}")
+    logger.info(f"Chat request received: session_id={request.session_id}, query={request.query}, user_id={request.user_id}, selected_tools={request.selected_tools}")
 
     return StreamingResponse(
-        generate(request.session_id, request.user_id, request.query),
+        generate(request.session_id, request.user_id, request.query, request.selected_tools),
         media_type="text/plain",
         headers={
             "Cache-Control": "no-cache",
@@ -343,3 +429,82 @@ async def chat(request: ChatRequest):
             "Access-Control-Allow-Headers": "Content-Type"
         }
     )
+
+# MCP Server Configuration Endpoints
+
+@app.get("/mcp-configs/{user_id}")
+def get_user_mcp_configs(user_id: str):
+    """Get MCP server configurations for a user"""
+    try:
+        configs = mcp_manager.get_user_mcp_configs(user_id)
+        return {
+            "user_id": user_id,
+            "servers": [config.to_dict() for config in configs]
+        }
+    except Exception as e:
+        logger.error(f"Error getting MCP configs for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting MCP configs: {str(e)}")
+
+@app.post("/mcp-configs/{user_id}")
+def save_user_mcp_configs(user_id: str, configs: List[MCPServerConfigRequest]):
+    """Save MCP server configurations for a user"""
+    try:
+        logger.info(f"Received MCP configs save request for user {user_id}")
+        logger.info(f"Raw configs data: {configs}")
+        
+        mcp_configs = [
+            MCPServerConfig(
+                name=config.name,
+                command=config.command,
+                args=config.args,
+                env=config.env,
+                description=config.description
+            )
+            for config in configs
+        ]
+        
+        logger.info(f"Processed {len(mcp_configs)} MCP configs for user {user_id}")
+        for i, config in enumerate(mcp_configs):
+            logger.info(f"Config {i+1}: {config.to_dict()}")
+        
+        mcp_manager.save_user_mcp_configs(user_id, mcp_configs)
+        
+        return {
+            "message": f"MCP configs saved for user {user_id}",
+            "count": len(mcp_configs)
+        }
+    except Exception as e:
+        logger.error(f"Error saving MCP configs for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error saving MCP configs: {str(e)}")
+
+@app.post("/mcp-configs/{user_id}/refresh")
+def refresh_user_mcp_client(user_id: str):
+    """Refresh MCP client for a user (clear cache and reinitialize)"""
+    try:
+        logger.info(f"Refreshing MCP client for user {user_id}")
+        
+        # Clear the cached client
+        if hasattr(mcp_manager, '_user_clients') and user_id in mcp_manager._user_clients:
+            del mcp_manager._user_clients[user_id]
+            logger.info(f"Cleared cached client for user {user_id}")
+        
+        # Force reinitialization by getting the client
+        client = mcp_manager.get_client(user_id)
+        
+        return {
+            "message": f"MCP client refreshed for user {user_id}",
+            "has_client": client is not None
+        }
+    except Exception as e:
+        logger.error(f"Error refreshing MCP client for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error refreshing MCP client: {str(e)}")
+
+@app.delete("/mcp-configs/{user_id}")
+def delete_user_mcp_configs(user_id: str):
+    """Delete MCP server configurations for a user"""
+    try:
+        mcp_manager.delete_user_mcp_configs(user_id)
+        return {"message": f"MCP configs deleted for user {user_id}"}
+    except Exception as e:
+        logger.error(f"Error deleting MCP configs for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting MCP configs: {str(e)}")

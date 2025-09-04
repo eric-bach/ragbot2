@@ -8,13 +8,20 @@ export async function GET(request: NextRequest) {
       throw new Error('NEXT_PUBLIC_BACKEND_URL environment variable is not set');
     }
 
+    // Get user_id from query parameters
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('user_id');
+
     // Determine the protocol and construct the URL
     const protocol = BACKEND_URL.includes('localhost') || BACKEND_URL.includes('127.0.0.1') ? 'http' : 'https';
     const backendUrl = `${protocol}://${BACKEND_URL}`;
 
-    console.log('Making request to backend URL:', backendUrl);
+    // Add user_id parameter if provided
+    const toolsUrl = userId ? `${backendUrl}/tools?user_id=${userId}` : `${backendUrl}/tools`;
 
-    const response = await fetch(`${backendUrl}/tools`, {
+    console.log('Making request to backend URL:', toolsUrl);
+
+    const response = await fetch(toolsUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

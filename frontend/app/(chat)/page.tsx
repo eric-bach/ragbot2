@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Trash2 } from 'lucide-react';
 import { getCurrentUser } from 'aws-amplify/auth';
 import ToolsButton from '../components/ToolsButton';
@@ -22,8 +22,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { tools, loading: toolsLoading, error: toolsError } = useTools();
+  const { tools, loading: toolsLoading, error: toolsError } = useTools(userId);
 
   // Generate session ID on component mount
   useEffect(() => {
@@ -78,6 +79,11 @@ export default function Home() {
     console.log('Generated new session ID after clear:', newSessionId);
   };
 
+  // Memoize the tools change handler to prevent unnecessary re-renders
+  const handleToolsChange = useCallback((newSelectedTools: string[]) => {
+    setSelectedTools(newSelectedTools);
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() || isLoading) return;
@@ -117,6 +123,7 @@ export default function Home() {
           session_id: sessionId,
           user_id: userId,
           query: userMessage.content,
+          selected_tools: selectedTools.length > 0 ? selectedTools : undefined,
         }),
       });
 
@@ -290,7 +297,17 @@ export default function Home() {
             <div className='flex items-center justify-between px-3 py-2'>
               <div className='flex items-center space-x-2'>
                 <UploadButton userId={userId} />
-                <ToolsButton tools={tools} loading={toolsLoading} error={toolsError} />
+                {/* View available tools */}
+                <ToolsButton tools={tools} loading={toolsLoading} error={toolsError} allowSelection={false} />
+                {/* Select tools for this query */}
+                <ToolsButton
+                  tools={tools}
+                  loading={toolsLoading}
+                  error={toolsError}
+                  allowSelection={true}
+                  selectedTools={selectedTools}
+                  onToolsChange={handleToolsChange}
+                />
               </div>
               <div className='flex items-center space-x-2'>
                 {messages.length > 0 && (

@@ -23,10 +23,10 @@
 - [x] BUG: Upload user documents under the user's id key in the S3 bucket
 - [x] Build estimate cost list
 - [x] BUG: The first request fails unless you wait a few seconds after loading the page
+- [x] Add support for user-configurable MCP servers with S3-based storage
+- [x] Add explicit tool selection for users to control which tools the agent uses
+- [x] Improve the design of the initial responses before the final response is received
 
-- [] Improve the design of the initial responses before the final response is received
 - [] Add polling on UI to check when Bedrock KB sync is completed
-- [] Add support to upload images
-
 - [] Investigate Strands Observability
 - [] Investigate adding Cognito auth to ALB

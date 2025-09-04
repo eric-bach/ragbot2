@@ -36,6 +36,21 @@ export default function TabbedResponse({ message }: TabbedResponseProps) {
     .filter((content) => content.length > 0)
     .join('\n\n');
 
+  // Helper function to count sources
+  const getSourcesCount = (rawContent: string): number => {
+    if (!rawContent) return 0;
+
+    // First try to find XML source tags
+    const xmlSourceMatches = rawContent.match(/<source[^>]*\/?>([\s\S]*?)<\/source>|<source[^>]*\/?>/g);
+    if (xmlSourceMatches) {
+      return xmlSourceMatches.length;
+    }
+
+    // If no XML tags, count bullet points (lines starting with -)
+    const bulletPointMatches = rawContent.match(/^- /gm);
+    return bulletPointMatches ? bulletPointMatches.length : 0;
+  };
+
   // Parse and format sources if they exist
   const formatSources = (rawContent: string) => {
     if (!rawContent) return '';
@@ -83,6 +98,7 @@ export default function TabbedResponse({ message }: TabbedResponseProps) {
   };
 
   const sourcesContent = formatSources(rawSourcesContent);
+  const sourcesCount = getSourcesCount(rawSourcesContent);
 
   // Extract all response content - handle multiple occurrences
   const responseMatches = Array.from(content.matchAll(/<response>([\s\S]*?)<\/response>/g));
@@ -276,14 +292,16 @@ export default function TabbedResponse({ message }: TabbedResponseProps) {
           </div>
         )}
 
-        {/* Sources Section */}
-        <CollapsibleSection
-          title={`Sources (${sourcesMatches.length})`}
-          content={sourcesContent}
-          isExpanded={expandedSections.sources}
-          onToggle={() => toggleSection('sources')}
-          icon={<Link width={18} height={18} />}
-        />
+        {/* Sources Section - only show if sources exist */}
+        {sourcesContent && (
+          <CollapsibleSection
+            title={`Sources (${sourcesCount})`}
+            content={sourcesContent}
+            isExpanded={expandedSections.sources}
+            onToggle={() => toggleSection('sources')}
+            icon={<Link width={18} height={18} />}
+          />
+        )}
       </div>
 
       {/* Feedback Buttons */}

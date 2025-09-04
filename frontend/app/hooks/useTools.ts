@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 
 interface Tool {
   name: string;
+  description?: string;
+  source?: string;
 }
 
 interface ToolsResponse {
@@ -16,7 +18,7 @@ interface HealthResponse {
   LINKUP_API_KEY: string;
 }
 
-export function useTools() {
+export function useTools(userId?: string) {
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,9 +45,10 @@ export function useTools() {
           const healthData: HealthResponse = await healthResponse.json();
           console.log('Backend health check passed:', healthData);
 
-          // Then fetch tools
+          // Then fetch tools with user ID if available
           console.log('Fetching tools...');
-          const response = await fetch('/api/tools');
+          const toolsUrl = userId ? `/api/tools?user_id=${userId}` : '/api/tools';
+          const response = await fetch(toolsUrl);
           if (!response.ok) {
             throw new Error(`Could not list tools (status: ${response.status})`);
           }
@@ -73,7 +76,7 @@ export function useTools() {
     };
 
     fetchTools();
-  }, []);
+  }, [userId]);
 
   return { tools, loading, error };
 }

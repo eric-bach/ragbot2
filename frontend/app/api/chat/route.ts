@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
         query: body.query,
         user_id: body.user_id,
         session_id: body.session_id, // Pass session_id to backend
+        selected_tools: body.selected_tools, // Pass selected tools to backend
       }),
       signal: controller.signal,
     };
