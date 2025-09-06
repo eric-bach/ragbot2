@@ -23,7 +23,7 @@ export default function Home() {
   const [sessionId, setSessionId] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { tools, loading: toolsLoading, error: toolsError } = useTools();
+  const { tools, loading: toolsLoading, error: toolsError } = useTools(userId);
 
   // Generate session ID on component mount
   useEffect(() => {

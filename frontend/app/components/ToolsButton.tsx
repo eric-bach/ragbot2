@@ -79,9 +79,9 @@ export default function ToolsButton({ tools, loading, error }: ToolsButtonProps)
                     {tool.source && (
                       <span
                         className={`text-xs px-2 py-1 rounded-full ${
-                          tool.source === 'aws'
-                            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                          tool.source === 'base'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                            : 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
                         }`}
                       >
                         {tool.source}

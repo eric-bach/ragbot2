@@ -16,12 +16,17 @@ interface HealthResponse {
   LINKUP_API_KEY: string;
 }
 
-export function useTools() {
+export function useTools(userId?: string) {
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Don't fetch tools if we don't have a userId yet
+    if (!userId) {
+      return;
+    }
+
     const fetchTools = async () => {
       // Add a shorter startup delay to give the backend time to initialize
       console.log('Waiting for backend to initialize...');
@@ -43,9 +48,9 @@ export function useTools() {
           const healthData: HealthResponse = await healthResponse.json();
           console.log('Backend health check passed:', healthData);
 
-          // Then fetch tools
-          console.log('Fetching tools...');
-          const response = await fetch('/api/tools');
+          // Then fetch tools for the specific user (includes MCP tools)
+          console.log(`Fetching tools for user ${userId}...`);
+          const response = await fetch(`/api/tools/${userId}`);
           if (!response.ok) {
             throw new Error(`Could not list tools (status: ${response.status})`);
           }
@@ -73,7 +78,7 @@ export function useTools() {
     };
 
     fetchTools();
-  }, []);
+  }, [userId]);
 
   return { tools, loading, error };
 }
