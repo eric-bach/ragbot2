@@ -41,6 +41,7 @@ class MCPConfigStore:
     async def get_user_config(self, user_id: str) -> Optional[UserMCPConfig]:
         """Retrieve user's MCP configuration from S3"""
         try:
+            logger.info(f"⚙️ Getting MCP config for: {user_id}")
             key = self._get_config_key(user_id)
 
             response = self.s3_client.get_object(
@@ -48,7 +49,11 @@ class MCPConfigStore:
                 Key=key
             )
 
+            logger.debug(f"Reading MCP config: {key}")
+
             config_data = json.loads(response['Body'].read().decode('utf-8'))
+
+            logger.info(f"🛠️ Found MCP config for: {user_id}")
             return UserMCPConfig(**config_data)
 
         except ClientError as e:

@@ -1,6 +1,7 @@
 """
 Agent service module containing business logic for building and managing Strands agents.
 """
+import json
 import logging
 from typing import List, Optional
 from strands import Agent
@@ -28,6 +29,8 @@ def build_agent_for_session(session_id: str, user_id: str, user_mcp_tools: Optio
     Returns:
         Configured Agent instance
     """
+    logger.info(f"⚙️ Building agent for session {session_id}, user {user_id}")
+
     if user_mcp_tools is None:
         user_mcp_tools = []
         
@@ -49,14 +52,13 @@ def build_agent_for_session(session_id: str, user_id: str, user_mcp_tools: Optio
     # Combine all tools (base tools + pre-collected MCP tools)
     tools = BASE_TOOLS + user_mcp_tools
 
-    logger.info(f"Final combined tools count: {len(tools)} (base: {len(BASE_TOOLS)}, MCP: {len(user_mcp_tools)})")
     for i, tool in enumerate(tools):
-        logger.info(f"Final Tool {i}: Type: {type(tool)}, Name: {getattr(tool, 'name', getattr(tool, 'tool_name', 'unknown'))}, Description: {getattr(tool, 'description', getattr(tool, '__doc__', 'no description'))}")
-
-    logger.debug("tools", tools)
+        logger.debug(f"Adding tool {i}: {json.dumps({'Type': str(type(tool)), 'Name': getattr(tool, 'name', getattr(tool, 'tool_name', 'unknown')), 'Description': getattr(tool, 'description', getattr(tool, '__doc__', 'no description'))})}")
 
     # Build dynamic system prompt that includes information about available MCP tools
     system_prompt = build_system_prompt(user_mcp_tools)
+
+    logger.info(f"✅ Agent built successfully with {len(tools)} tools and session id {session_id}")
 
     return Agent(
         agent_id="ragbot2",
@@ -153,6 +155,8 @@ def get_base_tools_info() -> List[dict]:
     Returns:
         List of dictionaries containing tool information
     """
+    logger.info("⚙️ Getting base tools")
+
     tools_info = []
     for tool in BASE_TOOLS:
         try:
@@ -175,6 +179,8 @@ def get_base_tools_info() -> List[dict]:
             # Add a fallback entry
             tools_info.append({"name": f"Tool_{len(tools_info)}"})
     
+    logger.info(f"🛠️ Found {len(tools_info)} base tools")
+
     return tools_info
 
 def process_mcp_tools_info(user_tools: List) -> List[dict]:
@@ -192,7 +198,7 @@ def process_mcp_tools_info(user_tools: List) -> List[dict]:
     for i, tool in enumerate(user_tools):
         try:
             # Debug logging to understand tool structure
-            logger.debug(f"Processing MCP tool: {tool}")
+            logger.debug(f"⚙️ Processing MCP tool: {tool}")
             
             tool_name = None
             # For custom tools (web_search)
@@ -214,13 +220,15 @@ def process_mcp_tools_info(user_tools: List) -> List[dict]:
             # Use the source attribute if it was set, otherwise fallback
             server_name = getattr(tool, 'source', 'MCP Server')
 
+            logger.debug(f"Processed MCP tool: {json.dumps({'name': tool_name, 'description': description, 'source': server_name})}")
+
             tools_info.append({
                 "name": tool_name,
                 "description": description,
                 "source": server_name
             })
         except Exception as e:
-            logger.warning(f"Could not process MCP tool {tool}: {e}")
+            logger.warning(f"🛑 Could not process MCP tool {tool}: {e}")
             # Add a fallback entry with basic info
             tools_info.append({
                 "name": f"Unknown_Tool_{len(tools_info)}",
@@ -228,4 +236,5 @@ def process_mcp_tools_info(user_tools: List) -> List[dict]:
                 "source": "MCP Server"
             })
     
+    logger.info(f"Processed {tools_info.count} MCP tools")
     return tools_info

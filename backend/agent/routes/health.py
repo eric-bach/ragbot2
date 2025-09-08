@@ -23,7 +23,6 @@ def home():
 @router.get("/health")
 def health():
     """Health check endpoint with configuration information."""
-    logger.info(f"✅ Health Check OK")
     return {
         "STATUS": "healthy",
         "AWS_REGION": AWS_REGION,

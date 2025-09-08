@@ -1,6 +1,7 @@
 """
 Chat-related routes for the RAGBot agent.
 """
+import json
 import logging
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -22,6 +23,8 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="No session_id provided")
     if not request.user_id:
         raise HTTPException(status_code=400, detail="No user_id provided")
+
+    logger.info(f"▶️ Chat request received: {json.dumps({'session_id': request.session_id, 'query': request.query, 'user_id': request.user_id})}")
 
     async def generate(session_id: str, user_id: str, query: str):
         """Generate streaming response for chat."""
@@ -56,7 +59,7 @@ async def chat(request: ChatRequest):
                                 if chunk_count % 60 == 0:  # Log every 60th chunk
                                     logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
                                 yield event['data']
-                        logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+                        logger.info(f"✅ Streaming response complete - total chunks: {chunk_count}")
                     except Exception as e:
                         logger.error(f"Error in agent stream: {str(e)}")
                         yield f"Error: {str(e)}"
@@ -76,16 +79,14 @@ async def chat(request: ChatRequest):
                             if chunk_count % 60 == 0:  # Log every 60th chunk
                                 logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
                             yield event['data']
-                    logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+                    logger.info(f"✅ Streaming response complete - total chunks: {chunk_count}")
                 except Exception as e:
                     logger.error(f"Error in agent stream: {str(e)}")
                     yield f"Error: {str(e)}"
 
         except Exception as e:
-            logger.error(f"Error setting up agent: {str(e)}")
+            logger.error(f"💣 Error setting up agent: {str(e)}")
             yield f"Error setting up agent: {str(e)}"
-
-    logger.info(f"Chat request received: session_id={request.session_id}, query={request.query}, user_id={request.user_id}")
 
     return StreamingResponse(
         generate(request.session_id, request.user_id, request.query),
