@@ -39,13 +39,52 @@ The project is structured into 3 folders:
 ```
 /ragbot2/
 └── backend/
-    ├── agent/          # Strands Agent server code
-         ├── .env       # .env file required for running locally
-└── frontend/           # NextJS frontend chatbot UI
-    ├── .env.local      # .env file for frontend client
-└── infrastructure/     # CDK code to deploy AWS resources (*Amazon Bedrock Knowledge Bases S3 Vectors is not supported yet so this needs to be manually created)
-    ├── .env            # .env file required for deploying backend resources
+    ├── agent/                    # Strands Agent server code
+        ├── agent.py              # Entry point for the application
+        ├── main.py               # FastAPI app configuration and setup
+        ├── config.py             # Environment variables and AWS client configuration
+        ├── .env                  # Environment file required for running locally
+        ├── services/             # Business logic modules
+        │   ├── agent_service.py  # Agent building and tool management logic
+        │   ├── mcp_client_manager.py  # MCP client management
+        │   └── mcp_config_store.py    # MCP configuration storage
+        ├── routes/               # API endpoint modules (organized by functionality)
+        │   ├── health.py         # Health check and basic info endpoints
+        │   ├── chat.py           # Chat streaming endpoints
+        │   ├── tools.py          # Tool listing and discovery endpoints
+        │   ├── sessions.py       # Session management endpoints
+        │   ├── files.py          # File upload and presigned URL endpoints
+        │   └── mcp_config.py     # MCP server configuration endpoints
+        ├── models/               # Pydantic data models
+        └── tools/                # Custom tool implementations
+└── frontend/                     # NextJS frontend chatbot UI
+    ├── .env.local               # Environment file for frontend client
+└── infrastructure/              # CDK code to deploy AWS resources (*Amazon Bedrock Knowledge Bases S3 Vectors is not supported yet so this needs to be manually created)
+    ├── .env                     # Environment file required for deploying backend resources
 ```
+
+### Backend Architecture
+
+The backend follows Python best practices with a modular structure:
+
+- **`agent.py`**: Simple entry point that imports the FastAPI app from `main.py`
+- **`main.py`**: Central application setup, FastAPI configuration, and route registration
+- **`config.py`**: Centralized configuration management for environment variables and AWS clients
+- **`services/`**: Business logic separated from API concerns
+  - Agent building, tool processing, and system prompt generation
+  - MCP client and configuration management
+- **`routes/`**: API endpoints organized by functionality for better maintainability
+  - Each route module handles a specific domain (health, chat, tools, etc.)
+  - Enables easy testing and modification of individual endpoint groups
+- **`models/`**: Pydantic data models for request/response validation
+- **`tools/`**: Custom tool implementations for the AI agent
+
+This structure provides:
+
+- **Separation of Concerns**: Each module has a single responsibility
+- **Maintainability**: Easy to locate and modify specific functionality
+- **Testability**: Individual components can be unit tested in isolation
+- **Scalability**: Simple to add new endpoints or modify existing ones
 
 #### Deploying to AWS
 
