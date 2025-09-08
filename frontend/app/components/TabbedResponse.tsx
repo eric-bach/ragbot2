@@ -201,14 +201,8 @@ export default function TabbedResponse({ message }: TabbedResponseProps) {
             {sectionStreaming && (
               <div className='flex space-x-1 ml-2'>
                 <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'></div>
-                <div
-                  className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
-                  style={{ animationDelay: '0.2s' }}
-                ></div>
-                <div
-                  className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse'
-                  style={{ animationDelay: '0.4s' }}
-                ></div>
+                <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse' style={{ animationDelay: '0.2s' }}></div>
+                <div className='w-1.5 h-1.5 bg-primary rounded-full animate-pulse' style={{ animationDelay: '0.4s' }}></div>
               </div>
             )}
           </div>
@@ -235,14 +229,7 @@ export default function TabbedResponse({ message }: TabbedResponseProps) {
       {/* Show cooking animation when streaming */}
       {isStreaming && (
         <div className='flex items-center space-x-2 text-sm text-muted-foreground pt-2 mb-4'>
-          <Image
-            src='/logo.png'
-            alt='RAGBot Logo'
-            className='w-4 h-4 animate-bounce'
-            style={{ animationDelay: '-0.3s' }}
-            width={6}
-            height={6}
-          />
+          <Image src='/logo.png' alt='RAGBot Logo' className='w-4 h-4 animate-bounce' style={{ animationDelay: '-0.3s' }} width={6} height={6} />
           <AnimatedLogo text='RAGBot 2' isAnimating={true} size='sm' />
           <span>is cooking...</span>
         </div>
@@ -278,7 +265,7 @@ export default function TabbedResponse({ message }: TabbedResponseProps) {
 
         {/* Sources Section */}
         <CollapsibleSection
-          title={`Sources (${sourcesMatches.length})`}
+          title={`Sources (${(rawSourcesContent.match(/- /g) || []).length})`}
           content={sourcesContent}
           isExpanded={expandedSections.sources}
           onToggle={() => toggleSection('sources')}
