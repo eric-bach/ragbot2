@@ -1,4 +1,5 @@
-FROM public.ecr.aws/docker/library/python:3.12-slim
+#FROM public.ecr.aws/docker/library/python:3.12-slim
+FROM nikolaik/python-nodejs:python3.12-nodejs22-slim
 
 # Set Python to run unbuffered for immediate log output
 # This ensures print() and logging statements appear immediately in CloudWatch
@@ -7,9 +8,11 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y && rm -rf /var/lib/apt/lists/*
+
+# Verify Node.js and uv are available
+RUN which node && which npm && which npx && which uv
+RUN node -v && npm -v && uv --version
 
 # Install Python dependencies
 COPY requirements.txt .

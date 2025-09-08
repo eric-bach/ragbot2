@@ -1,17 +1,17 @@
 import os
 import boto3
 import logging
-import json
 from botocore.config import Config
 from dotenv import load_dotenv
 from strands import Agent
-from strands_tools import http_request, retrieve
+from strands_tools import retrieve, current_time
 from strands.models import BedrockModel
-from strands.tools.mcp import MCPClient
 from strands.session.s3_session_manager import S3SessionManager
-from strands.agent.conversation_manager import SummarizingConversationManager, SlidingWindowConversationManager
+from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.web_search import web_search
-from mcp_client_manager import MCPClientManager
+from services.mcp_client_manager import mcp_client_manager
+from services.mcp_config_store import MCPConfigStore
+from models.mcp_config import MCPConfigRequest, MCPConfigResponse, UserMCPConfig
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,24 +36,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-async def startup_event():
-    """Initialize MCP client on startup"""
-    try:
-        logger.info("Initializing MCP client on startup...")
-        mcp_manager.get_client()
-        logger.info("MCP client initialized successfully on startup")
-    except Exception as e:
-        logger.warning(f"Failed to initialize MCP client on startup: {e}")
-        logger.info("MCP client will be initialized on first use")
-
 load_dotenv()
 AWS_REGION = os.getenv('AWS_REGION', 'us-west-2') # Used by the Bedrock model
 BEDROCK_MODEL_ID = os.getenv('BEDROCK_MODEL_ID') 
 KNOWLEDGE_BASE_ID = os.getenv('KNOWLEDGE_BASE_ID') # Used by the retrieve tool
-SESSIONS_BUCKET_NAME = os.getenv('SESSIONS_BUCKET_NAME') # Used by Strands Agent sessions
+DATA_BUCKET_NAME = os.getenv('DATA_BUCKET_NAME', '')
 KNOWLEDGE_SOURCE_BUCKET_NAME = os.getenv('KNOWLEDGE_SOURCE_BUCKET_NAME') # Used by the presigned-url endpoint
-LINKUP_API_KEY = os.getenv('LINKUP_API_KEY') # Used by the web_search tool
+LINKUP_API_KEY = os.getenv('LINKUP_API_KEY', '') # Used by the web_search tool
+BASE_TOOLS = [web_search, current_time, retrieve]
+
+if (not BEDROCK_MODEL_ID):
+    logger.error("BEDROCK_MODEL_ID environment variable is not set")
+    raise Exception("BEDROCK_MODEL_ID environment variable is not set")
+if (not DATA_BUCKET_NAME or DATA_BUCKET_NAME == ''):
+    logger.error("DATA_BUCKET_NAME environment variable is not set")
+    raise Exception("DATA_BUCKET_NAME environment variable is not set")
+if (not LINKUP_API_KEY or LINKUP_API_KEY == ''):
+    logger.error("LINKUP_API_KEY environment variable is not set")
+    raise Exception("LINKUP_API_KEY environment variable is not set")
 
 # Create session without profile for ECS deployment
 session = boto3.Session(region_name=AWS_REGION)
@@ -72,75 +72,100 @@ bedrock_model = BedrockModel(
     boto_session=session
 )
 
-# Global MCP client manager
-mcp_manager = MCPClientManager()
+# Initialize MCP config store
+mcp_config_store = MCPConfigStore(
+    bucket_name=DATA_BUCKET_NAME,
+    region_name=AWS_REGION,
+    boto_session=session
+)
 
 class ChatRequest(BaseModel):
     session_id: str
     user_id: str
     query: str
 
-def build_agent_for_session(session_id: str, user_id: str, mcp_client: MCPClient) -> Agent:
-    """Builds and returns a Strands Agent to a persistent session in S3 
-    with conversation management"""
+def build_agent_for_session(session_id: str, user_id: str, user_mcp_tools: list = []) -> Agent:
+    """Builds and returns a Strands Agent with conversation management and pre-collected MCP tools"""
     session_manager = S3SessionManager(
         session_id=session_id,
-        bucket=SESSIONS_BUCKET_NAME,
-        prefix=f"sessions/user_{user_id}",
+        bucket=DATA_BUCKET_NAME,
+        prefix=f"sessions/{user_id}",
         boto_session=session,
         region_name=AWS_REGION
     )
     conversation_manager = SlidingWindowConversationManager(
         window_size=10
     )
-    
-    tools = mcp_client.list_tools_sync() + [web_search, http_request, retrieve]
+
+    # Combine all tools (base tools + pre-collected MCP tools)
+    tools = BASE_TOOLS + user_mcp_tools
+
+    logger.info(f"Final combined tools count: {len(tools)} (base: {len(BASE_TOOLS)}, MCP: {len(user_mcp_tools)})")
+    for i, tool in enumerate(tools):
+        logger.info(f"Final Tool {i}: Type: {type(tool)}, Name: {getattr(tool, 'name', getattr(tool, 'tool_name', 'unknown'))}, Description: {getattr(tool, 'description', getattr(tool, '__doc__', 'no description'))}")
 
     logger.debug("tools", tools)
 
+    # Build dynamic system prompt that includes information about available MCP tools
+    base_tools_description = """
+    - Web search using LinkUp API (web_search)
+    - Getting the current date and time (current_time)
+    - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)"""
+    
+    mcp_tools_description = ""
+    if user_mcp_tools:
+        mcp_tools_description = "\n\nAdditionally, you have access to the following MCP server tools:"
+        for tool in user_mcp_tools:
+            tool_name = getattr(tool, 'name', getattr(tool, 'tool_name', 'unknown'))
+            tool_description = getattr(tool, 'description', getattr(tool, '__doc__', 'no description'))
+            tool_source = getattr(tool, 'source', 'MCP Server')
+            
+            # Clean up description - take first line only
+            if tool_description and tool_description != 'no description':
+                tool_description = tool_description.strip().split('\n')[0]
+            else:
+                tool_description = "MCP tool"
+            
+            mcp_tools_description += f"\n    - {tool_name} (from {tool_source}): {tool_description}"
+
+    system_prompt = f"""You are an AI assistant that helps users answer any type of questions.
+You have access to the following base tools:{base_tools_description}{mcp_tools_description}
+
+**Instructions:**
+    - For EVERY user query, select one or more tools to use based on the user's question.
+    - Prioritize MCP server tools when they are relevant to the user's query, as they provide specialized functionality.
+    - You MUST call and use at least one tool.
+    - NEVER answer based solely on your own knowledge, even if you think you know the answer.
+    - Only answer after reviewing results from all relevant tools.
+
+**Response Format:**
+    - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
+        - <thinking>: Explain your approach, reasoning, and tool choices.
+        - <response>: Provide a clear, human-readable answer.
+        - <sources>: List ALL tool outputs and/or sources used.
+    - Do NOT output anything except these three tags.
+    - Respond in a friendly, Albertan tone.
+            
+**Example valid output:**
+<thinking>
+I used both web_search and retrieve because the user asked about current events and general knowledge.
+</thinking>
+
+<response>
+Here is the answer to your question based on the latest available sources...
+</response>
+
+<sources>
+- web_search: [search summary]
+- retrieve: [document snippet]
+</sources>
+
+Always follow this response structure and do NOT skip tool calls, otherwise your response is considered invalid.
+        """
+
     return Agent(
         agent_id="ragbot2",
-        system_prompt="""
-        You are an AI assistant that helps users answer any type of questions with three essential tools:
-            - Web search using LinkUp API (web_search)
-            - AWS documentation (MCP tools)
-            - Retrieval-Augmented Generation (RAG) knowledge base (retrieve)
-            
-        **Thinking:**
-            - For EVERY user query, your default is to use the retrieve tool.
-            - If the user question is about a specific AWS service, use the AWS documentation tool.
-            - If the user question requires a real-time answer (e.g. weather, stock prices, news, anything that can
-            change minute-to-minute), use the web_search tool instead of the retrieve tool.
-            - If you are not sure, prefer retrieve unless the query clearly matches on of the special cases above.
-            - Only if the retrieve or AWS documentation tool cannot find the answer, use the web_search tool to find the answer.
-
-        **Instructions:**
-            - For EVERY user query, you MUST call and use at least one tool.
-            - NEVER answer based solely on your own knowledge, even if you think you know the answer.
-            - Only answer after reviewing results from all relevant tools.
-            - Your response must ALWAYS use the three required tags ONLY, and in Markdown format:
-                - <thinking>: Explain your approach, reasoning, and tool choices.
-                - <response>: Provide a clear, human-readable answer.
-                - <sources>: List ALL tool outputs and/or sources used.
-            - Do NOT output anything except these three tags.
-            - Respond in a friendly, Albertan tone.
-            
-        **Example valid output:**
-        <thinking>
-        I used both web_search and retrieve because the user asked about current events and general knowledge.
-        </thinking>
-
-        <response>
-        Here is the answer to your question based on the latest available sources...
-        </response>
-
-        <sources>
-        - web_search: [search summary]
-        - retrieve: [document snippet]
-        </sources>
-
-        Always follow this response structure and do NOT skip tool calls, otherwise your response is considered invalid.
-        """,
+        system_prompt=system_prompt,
         tools=tools,
         model=bedrock_model,
         session_manager=session_manager,
@@ -154,11 +179,12 @@ def home():
 
 @app.get("/health")
 def health():
+    logger.info(f"✅ Health Check OK")
     return {
         "STATUS": "healthy",
         "AWS_REGION": AWS_REGION,
         "KNOWLEDGE_BASE_ID": KNOWLEDGE_BASE_ID,
-        "SESSIONS_BUCKET_NAME": SESSIONS_BUCKET_NAME,
+        "DATA_BUCKET_NAME": DATA_BUCKET_NAME,
         "KNOWLEDGE_SOURCE_BUCKET_NAME": KNOWLEDGE_SOURCE_BUCKET_NAME,
         "LINKUP_API_KEY": f"***{LINKUP_API_KEY[-3:]}",
     }
@@ -166,26 +192,17 @@ def health():
 @app.get("/tools")
 def get_tools():
     """Get list of available tools for the AI agent"""
-    import time
-    
-    base_tools = [web_search, http_request, retrieve]
-    tools_info = []
+    logger.info(f"🏁 Getting all tools")
 
-    for tool in base_tools:
+    tools_info = []
+    for tool in BASE_TOOLS:
         try:
-            # For custom tools (web_search)
             if hasattr(tool, 'tool_name'):
                 tool_name = tool.tool_name
-            # For strands tools (http_request, retrieve)
-            elif hasattr(tool, '__name__'):
-                tool_name = tool.__name__
             else:
-                tool_name = str(tool)
+                tool_name = getattr(tool, '__name__', str(tool))
             
-            description = getattr(tool, 'description', None)
-            if not description and hasattr(tool, '__doc__'):
-                description = tool.__doc__
-            
+            description = getattr(tool, 'description', None) or getattr(tool, '__doc__', None)
             if description:
                 description = description.strip().split('\n')[0]  # First line only
 
@@ -195,47 +212,113 @@ def get_tools():
                 "source": "base"
             })
         except Exception as e:
-            logger.warning(f"Could not process strands tool {tool}: {e}")
-
-    # Add AWS tools with retry logic
-    max_retries = 3
-    retry_delay = 1
+            logger.warning(f"Could not process tool {tool}: {e}")
+            # Add a fallback entry
+            tools_info.append({"name": f"Tool_{len(tools_info)}"})
     
-    for attempt in range(max_retries):
-        try:
-            aws_documentation_mcp_client = mcp_manager.get_client()
-            with aws_documentation_mcp_client:  
-                aws_tools = aws_documentation_mcp_client.list_tools_sync()
-                
-                for tool in aws_tools:
-                    try:
-                        # Get the tool name, description, and source
-                        tool_name = tool.tool_name
-                        description = tool.tool_spec["description"].strip().split('\n')[0]
-                        source = "aws"
-
-                        tools_info.append({
-                            "name": tool_name,
-                            "description": description,
-                            "source": source
-                        })
-                    except Exception as e:
-                        logger.warning(f"Could not process AWS tool {tool}: {e}")
-            break  # Success, exit retry loop
-            
-        except Exception as e:
-            logger.warning(f"Attempt {attempt + 1} failed to get AWS tools: {e}")
-            if attempt < max_retries - 1:
-                logger.info(f"Retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-            else:
-                logger.error("Failed to get AWS tools after all retries")
-
+    logger.info(f"✅ Found tools: {tools_info}")
     return {
         "tools": tools_info,
         "total_count": len(tools_info)
     }
+
+@app.get("/tools/{user_id}")
+async def get_user_tools(user_id: str):
+    """Get list of all available tools including user-configured MCP tools"""
+    logger.info(f"🏁 Getting tools for user {user_id}")
+
+    try:
+        # Get user's MCP configuration
+        user_config = await mcp_config_store.get_user_config(user_id)
+        user_mcp_configs = user_config.servers if user_config else []
+
+        # Start with base tools
+        tools_info = []
+
+        # Add base tools
+        for tool in BASE_TOOLS:
+            try:
+                if hasattr(tool, 'tool_name'):
+                    tool_name = tool.tool_name
+                else:
+                    tool_name = getattr(tool, '__name__', str(tool))
+                
+                description = getattr(tool, 'description', None) or getattr(tool, '__doc__', None)
+                if description:
+                    description = description.strip().split('\n')[0]  # First line only
+
+                tools_info.append({
+                    "name": tool_name,
+                    "description": description,
+                    "source": "base"
+                })
+            except Exception as e:
+                logger.warning(f"Could not process base tool {tool}: {e}")
+
+        # Add user-configured MCP server tools with proper resource management
+        mcp_errors = []
+        if user_mcp_configs:
+            try:
+                async with mcp_client_manager.get_combined_tools(user_mcp_configs) as (user_tools, clients, errors):
+                    logger.info(f"Retrieved {len(user_tools)} tools from {len(clients)} MCP clients")
+                    mcp_errors = errors
+                    
+                    # Log any MCP errors for debugging
+                    if mcp_errors:
+                        logger.warning(f"MCP server errors: {mcp_errors}")
+
+                    for i, tool in enumerate(user_tools):
+                        try:
+                            # Debug logging to understand tool structure
+                            logger.debug(f"Processing MCP tool: {tool}")
+                            
+                            tool_name = None
+                            # For custom tools (web_search)
+                            if hasattr(tool, 'tool_name'):
+                                tool_name = tool.tool_name
+                            # For strands tools (http_request, retrieve)
+                            elif hasattr(tool, '__name__'):
+                                tool_name = tool.__name__
+                            else:
+                                tool_name = str(tool)
+
+                            description = getattr(tool, 'description', None)
+                            if not description and hasattr(tool, '__doc__'):
+                                description = tool.__doc__
+                            
+                            if description:
+                                description = description.strip().split('\n')[0]  # First line only
+
+                            # Use the source attribute if it was set, otherwise fallback
+                            server_name = getattr(tool, 'source', 'MCP Server')
+
+                            tools_info.append({
+                                "name": tool_name,
+                                "description": description,
+                                "source": server_name
+                            })
+                        except Exception as e:
+                            logger.warning(f"Could not process MCP tool {tool}: {e}")
+                            # Add a fallback entry with basic info
+                            tools_info.append({
+                                "name": f"Unknown_Tool_{len(tools_info)}",
+                                "description": "MCP tool",
+                                "source": "MCP Server"
+                            })
+
+            except Exception as e:
+                logger.error(f"Failed to get MCP tools: {str(e)}")
+
+        logger.info(f"✅ Found tools for user {user_id}: {tools_info}")
+        return {
+            "tools": tools_info,
+            "total_count": len(tools_info),
+            "mcp_errors": mcp_errors
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting tools for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving tools: {str(e)}")
 
 @app.get("/presigned-url")
 def generate_presigned_url(user_id: str = Query(..., description="User ID"), file_name: str = Query(..., description="Name of the file to upload")):
@@ -285,11 +368,11 @@ async def delete_session(user_id: str, session_id: str):
     prefix = f"sessions/user_{user_id}/session_{session_id}/"
     try:
         # List all objects under just the target session folder
-        response = s3.list_objects_v2(Bucket=SESSIONS_BUCKET_NAME, Prefix=prefix)
+        response = s3.list_objects_v2(Bucket=DATA_BUCKET_NAME, Prefix=prefix)
         if 'Contents' in response:
             objects_to_delete = [{'Key': obj['Key']} for obj in response['Contents']]
             s3.delete_objects(
-                Bucket=SESSIONS_BUCKET_NAME,
+                Bucket=DATA_BUCKET_NAME,
                 Delete={'Objects': objects_to_delete}
             )
             return {"message": f"Deleted {len(objects_to_delete)} objects in session {session_id}"}
@@ -308,38 +391,126 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="No user_id provided")
 
     async def generate(session_id: str, user_id: str, query: str):
-        aws_documentation_mcp_client = mcp_manager.get_client()
+        try:
+            # Get user's MCP configuration
+            user_config = await mcp_config_store.get_user_config(user_id)
+            user_mcp_configs = user_config.servers if user_config else []
         
-        with aws_documentation_mcp_client:
-            agent = build_agent_for_session(session_id, user_id, mcp_client=aws_documentation_mcp_client)
+            # Handle MCP tools with proper async context management
+            if user_mcp_configs:
+                # Use the async context manager to get MCP tools
+                async with mcp_client_manager.get_combined_tools(user_mcp_configs) as (user_mcp_tools, clients, errors):
+                    logger.info(f"Using {len(clients)} MCP clients with {len(user_mcp_tools)} tools for user {user_id}")
+                    
+                    # Log any MCP errors
+                    if errors:
+                        logger.warning(f"MCP server errors for user {user_id}: {errors}")
+                    
+                    # Build agent with the collected MCP tools
+                    agent = build_agent_for_session(session_id, user_id, user_mcp_tools)
 
-            try:
-                agent_stream = agent.stream_async(query)
-                
-                chunk_count = 0
-                async for event in agent_stream:
-                    if "data" in event:
-                        # Only stream text chunks to the client
-                        chunk_count += 1
-                        if chunk_count % 60 == 0:  # Log every 60th chunk
-                            logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
-                        yield event['data']
-                logger.info(f"Streaming response complete - total chunks: {chunk_count}")
-            except Exception as e:
-                logger.error(f"Error in agent stream: {str(e)}")
-                yield f"Error: {str(e)}"
+                    try:
+                        agent_stream = agent.stream_async(query)
+                        
+                        chunk_count = 0
+                        async for event in agent_stream:
+                            if "data" in event:
+                                # Only stream text chunks to the client
+                                chunk_count += 1
+                                if chunk_count % 60 == 0:  # Log every 60th chunk
+                                    logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
+                                yield event['data']
+                        logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+                    except Exception as e:
+                        logger.error(f"Error in agent stream: {str(e)}")
+                        yield f"Error: {str(e)}"
+            else:
+                # No MCP tools, just use base tools
+                logger.info(f"Using base tools only for user {user_id}")
+                agent = build_agent_for_session(session_id, user_id, [])
+
+                try:
+                    agent_stream = agent.stream_async(query)
+                    
+                    chunk_count = 0
+                    async for event in agent_stream:
+                        if "data" in event:
+                            # Only stream text chunks to the client
+                            chunk_count += 1
+                            if chunk_count % 60 == 0:  # Log every 60th chunk
+                                logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
+                            yield event['data']
+                    logger.info(f"Streaming response complete - total chunks: {chunk_count}")
+                except Exception as e:
+                    logger.error(f"Error in agent stream: {str(e)}")
+                    yield f"Error: {str(e)}"
+
+        except Exception as e:
+            logger.error(f"Error setting up agent: {str(e)}")
+            yield f"Error setting up agent: {str(e)}"
 
     logger.info(f"Chat request received: session_id={request.session_id}, query={request.query}, user_id={request.user_id}")
 
     return StreamingResponse(
         generate(request.session_id, request.user_id, request.query),
-        media_type="text/plain",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx/cloudflare buffering
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type"
-        }
+        media_type="text/plain"
     )
+
+@app.get("/mcp-config/{user_id}")
+async def get_mcp_config(user_id: str):
+    """Get user's MCP server configuration"""
+    try:
+        config = await mcp_config_store.get_user_config(user_id)
+        if config:
+            return MCPConfigResponse(
+                success=True,
+                message="Configuration retrieved successfully",
+                servers=config.servers
+            )
+        else:
+            return MCPConfigResponse(
+                success=True,
+                message="No configuration found",
+                servers=[]
+            )
+    except Exception as e:
+        logger.error(f"Error getting MCP config for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving configuration: {str(e)}")
+    
+@app.post("/mcp-config/{user_id}")
+async def save_mcp_config(user_id: str, request: MCPConfigRequest):
+    """Save user's MCP server configuration"""
+    try:
+        user_config = UserMCPConfig(user_id=user_id, servers=request.servers)
+        success = await mcp_config_store.save_user_config(user_id, user_config)
+
+        if success:
+            return MCPConfigResponse(
+                success=True,
+                message="Configuration saved successfully",
+                servers=request.servers
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
+
+    except Exception as e:
+        logger.error(f"Error saving MCP config for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error saving configuration: {str(e)}")
+    
+@app.delete("/mcp-config/{user_id}")
+async def delete_mcp_config(user_id: str):
+    """Delete user's MCP server configuration"""
+    try:
+        success = await mcp_config_store.delete_user_config(user_id)
+
+        if success:
+            return MCPConfigResponse(
+                success=True,
+                message="Configuration deleted successfully"
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to delete configuration")
+
+    except Exception as e:
+        logger.error(f"Error deleting MCP config for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting configuration: {str(e)}")
