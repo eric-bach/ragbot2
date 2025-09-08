@@ -1,4 +1,5 @@
 import os
+import json
 import asyncio
 import logging
 from typing import List, Dict, Optional
@@ -71,9 +72,7 @@ class MCPClientManager:
                     # If shlex fails, fallback to simple split
                     args = args[0].split()
 
-            logger.info(f"Creating stdio MCP client for {config.name} with command: '{command}' and args: {args}")
-            logger.info(f"Full command line would be: {command} {' '.join(args)}")
-            logger.info(f"Environment variables for {config.name}: {env}")
+            logger.info(f"Initializing MCP client: {json.dumps({'command': command, 'args': ' '.join(args), 'env': env})}")
 
             # Verify command exists before creating client
             import shutil
@@ -83,7 +82,7 @@ class MCPClientManager:
                 logger.info(f"Available commands in PATH: {[shutil.which(cmd) for cmd in ['python', 'python3', 'node', 'npm', 'npx', 'uvx'] if shutil.which(cmd)]}")
                 return None
                 
-            logger.info(f"Command '{command}' found at: {command_path}")
+            logger.debug(f"Command '{command}' found at: {command_path}")
 
             # Add timeout to prevent hanging connections
             client = MCPClient(lambda: stdio_client(
@@ -95,11 +94,10 @@ class MCPClientManager:
             ))
 
             # Test the client connection with a short timeout
-            logger.info(f"Testing connection to MCP server: {config.name}")
             return client
 
         except Exception as e:
-            logger.error(f"Failed to create stdio MCP client for {config.name}: {str(e)}")
+            logger.error(f"🛑 Failed to create stdio MCP client for {config.name}: {str(e)}")
             return None
     
     def _create_sse_client(self, config: MCPServerConfig) -> Optional[MCPClient]:
@@ -118,14 +116,18 @@ class MCPClientManager:
         """Create MCP clients from a list of configurations"""
         clients = []
 
-        logger.info(f"Processing {len(configs)} MCP server configurations")
+        logger.info(f"⚙️ Creating {len(configs)} MCP clients from MCP configurations")
 
-        for i, config in enumerate(configs):
-            logger.info(f"Processing config {i+1}: name={config.name}, enabled={config.enabled}, command={config.command}, args={config.args}")
-            
+        for i, config in enumerate(configs):         
             if not config.enabled:
-                logger.info(f"Skipping disabled MCP server: {config.name}")
                 continue
+
+            logger.info(f"Initializing MCP client ({i+1}): {json.dumps({
+                'name': config.name,
+                'command': config.command,
+                'args': config.args,
+                'enabled': config.enabled
+            })}")
 
             client = None
 
@@ -141,15 +143,17 @@ class MCPClientManager:
 
             if client:
                 clients.append(client)
-                logger.info(f"Created MCP client for {config.name}")
+                logger.info(f"🛠️ Created MCP client for {config.name}")
             else:
-                logger.error(f"Failed to create MCP client for {config.name}")
+                logger.error(f"🛑 Failed to create MCP client for {config.name}")
 
         return clients
             
     @asynccontextmanager
     async def get_combined_tools(self, user_configs: List[MCPServerConfig]):
         """Context manager that creates clients and yields combined tools"""
+        logger.info("⚙️ Getting all tools")
+
         clients = self.create_clients_from_config(user_configs)
         
         # Track errors for user feedback
@@ -160,7 +164,8 @@ class MCPClientManager:
 
         for i, client in enumerate(clients):
             try:
-                logger.info(f"⏳ Starting MCP client {i+1}/{len(clients)}: {client}")
+                server_name = user_configs[i].name if i < len(user_configs) else f"Client {i+1}"
+                logger.info(f"Starting MCP client {i+1}/{len(clients)}: {server_name}")
 
                 # Use asyncio wait_for to prevent hanging
                 await asyncio.wait_for(
@@ -168,7 +173,8 @@ class MCPClientManager:
                     timeout=10.0  # 10 second timeout
                 )
                 active_clients.append(client)
-                logger.info(f"✅ Successfully started MCP client {i+1}")
+
+                logger.info(f"🛠️ Successfully started MCP client {i+1}")
             except asyncio.TimeoutError:
                 error_msg = f"Timeout starting MCP client {i+1} after 10 seconds"
                 logger.error(f"❌ {error_msg}")
@@ -203,31 +209,29 @@ class MCPClientManager:
 
                     # Debug: Log retrieved tool details and set source
                     for tool in tools:
-                        logger.info(f"Retrieved MCP Tool - Type: {type(tool)}, Name: {getattr(tool, 'name', 'unknown')}, Description: {getattr(tool, 'description', 'no description')}")
+                        logger.debug(f"Listing tools for: {tool}")
                         if hasattr(tool, '__dict__'):
-                            logger.info(f"MCP Tool attributes: {tool.__dict__}")
+                            logger.debug(f"Found MCP tool attributes: {tool.__dict__}")
                         
                         # Fix MCPAgentTool attributes if they're not set properly
                         if hasattr(tool, 'mcp_tool') and tool.mcp_tool:
                             if not hasattr(tool, 'name') or not tool.name:
                                 tool.name = tool.mcp_tool.name
-                                logger.info(f"Set tool name to: {tool.name}")
+                                logger.info(f"Found tool: {tool.name}")
+                            if not hasattr(tool, 'tool_name') or not tool.tool_name:
+                                tool.tool_name = tool.mcp_tool.name
+                                logger.info(f"Found tool: {tool.tool_name}")
                             if not hasattr(tool, 'description') or not tool.description:
-                                # Use first line of description for brevity
                                 description = tool.mcp_tool.description
                                 if description:
                                     tool.description = description.split('\n')[0].strip()
-                                    logger.info(f"Set tool description to: {tool.description}")
-                            if not hasattr(tool, 'tool_name') or not tool.tool_name:
-                                tool.tool_name = tool.mcp_tool.name
-                                logger.info(f"Set tool_name to: {tool.tool_name}")
-                        
+                                    logger.info(f"Found tool description: {tool.description}")
                         # Set the source to the server name
                         tool.source = server_name
-                        logger.info(f"Set tool source to: {server_name}")
+                        logger.info(f"Found {len(tools)} tools from MCP client {server_name}")
+
 
                     all_tools.extend(tools)
-                    logger.info(f"Retrieved {len(tools)} tools from MCP client")
                 except asyncio.TimeoutError:
                     error_msg = f"Timeout getting tools from MCP client after 5 seconds"
                     logger.error(error_msg)
@@ -240,7 +244,7 @@ class MCPClientManager:
                             "type": "tools_timeout"
                         })
                 except Exception as e:
-                    error_msg = f"Failed to get tools from MCP client: {str(e)}"
+                    error_msg = f"🛑 Failed to get tools from MCP client: {str(e)}"
                     logger.error(error_msg)
                     # Find the corresponding config for this client
                     client_index = active_clients.index(client)
@@ -266,6 +270,8 @@ class MCPClientManager:
                     logger.error(f"Timeout closing MCP client after 5 seconds")
                 except Exception as e:
                     logger.error(f"Error closing MCP client: {str(e)}")
+
+            logger.info(f"🛠️ Found all tools")
 
 # Singleton instance
 mcp_client_manager = MCPClientManager()

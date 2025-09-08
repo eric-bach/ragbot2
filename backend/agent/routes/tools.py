@@ -11,23 +11,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/tools")
-def get_tools():
-    """Get list of available base tools for the AI agent."""
-    logger.info(f"🏁 Getting all tools")
-    
-    tools_info = get_base_tools_info()
-    
-    logger.info(f"✅ Found tools: {tools_info}")
-    return {
-        "tools": tools_info,
-        "total_count": len(tools_info)
-    }
-
 @router.get("/tools/{user_id}")
 async def get_user_tools(user_id: str):
     """Get list of all available tools including user-configured MCP tools."""
-    logger.info(f"🏁 Getting tools for user {user_id}")
+    logger.info(f"▶️ Getting tools for user {user_id}")
 
     try:
         mcp_config_store = get_mcp_config_store()
@@ -44,7 +31,7 @@ async def get_user_tools(user_id: str):
         if user_mcp_configs:
             try:
                 async with mcp_client_manager.get_combined_tools(user_mcp_configs) as (user_tools, clients, errors):
-                    logger.info(f"Retrieved {len(user_tools)} tools from {len(clients)} MCP clients")
+                    logger.debug(f"Retrieved {len(user_tools)} tools from {len(clients)} MCP clients")
                     mcp_errors = errors
                     
                     # Log any MCP errors for debugging
@@ -58,7 +45,8 @@ async def get_user_tools(user_id: str):
             except Exception as e:
                 logger.error(f"Failed to get MCP tools: {str(e)}")
 
-        logger.info(f"✅ Found tools for user {user_id}: {tools_info}")
+        logger.info(f"✅ Found {tools_info.count} tools for user {user_id}: {tools_info}")
+        
         return {
             "tools": tools_info,
             "total_count": len(tools_info),

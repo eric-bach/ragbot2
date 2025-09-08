@@ -1,6 +1,7 @@
 """
 Agent service module containing business logic for building and managing Strands agents.
 """
+import json
 import logging
 from typing import List, Optional
 from strands import Agent
@@ -153,6 +154,8 @@ def get_base_tools_info() -> List[dict]:
     Returns:
         List of dictionaries containing tool information
     """
+    logger.info("⚙️ Getting base tools")
+
     tools_info = []
     for tool in BASE_TOOLS:
         try:
@@ -175,6 +178,8 @@ def get_base_tools_info() -> List[dict]:
             # Add a fallback entry
             tools_info.append({"name": f"Tool_{len(tools_info)}"})
     
+    logger.info(f"🛠️ Found {len(tools_info)} base tools")
+
     return tools_info
 
 def process_mcp_tools_info(user_tools: List) -> List[dict]:
@@ -192,7 +197,7 @@ def process_mcp_tools_info(user_tools: List) -> List[dict]:
     for i, tool in enumerate(user_tools):
         try:
             # Debug logging to understand tool structure
-            logger.debug(f"Processing MCP tool: {tool}")
+            logger.debug(f"⚙️ Processing MCP tool: {tool}")
             
             tool_name = None
             # For custom tools (web_search)
@@ -214,13 +219,15 @@ def process_mcp_tools_info(user_tools: List) -> List[dict]:
             # Use the source attribute if it was set, otherwise fallback
             server_name = getattr(tool, 'source', 'MCP Server')
 
+            logger.debug(f"Processed MCP tool: {json.dumps({'name': tool_name, 'description': description, 'source': server_name})}")
+
             tools_info.append({
                 "name": tool_name,
                 "description": description,
                 "source": server_name
             })
         except Exception as e:
-            logger.warning(f"Could not process MCP tool {tool}: {e}")
+            logger.warning(f"🛑 Could not process MCP tool {tool}: {e}")
             # Add a fallback entry with basic info
             tools_info.append({
                 "name": f"Unknown_Tool_{len(tools_info)}",
@@ -228,4 +235,5 @@ def process_mcp_tools_info(user_tools: List) -> List[dict]:
                 "source": "MCP Server"
             })
     
+    logger.info(f"Processed {tools_info.count} MCP tools")
     return tools_info
