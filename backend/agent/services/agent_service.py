@@ -29,6 +29,8 @@ def build_agent_for_session(session_id: str, user_id: str, user_mcp_tools: Optio
     Returns:
         Configured Agent instance
     """
+    logger.info(f"⚙️ Building agent for session {session_id}, user {user_id}")
+
     if user_mcp_tools is None:
         user_mcp_tools = []
         
@@ -50,14 +52,13 @@ def build_agent_for_session(session_id: str, user_id: str, user_mcp_tools: Optio
     # Combine all tools (base tools + pre-collected MCP tools)
     tools = BASE_TOOLS + user_mcp_tools
 
-    logger.info(f"Final combined tools count: {len(tools)} (base: {len(BASE_TOOLS)}, MCP: {len(user_mcp_tools)})")
     for i, tool in enumerate(tools):
-        logger.info(f"Final Tool {i}: Type: {type(tool)}, Name: {getattr(tool, 'name', getattr(tool, 'tool_name', 'unknown'))}, Description: {getattr(tool, 'description', getattr(tool, '__doc__', 'no description'))}")
-
-    logger.debug("tools", tools)
+        logger.debug(f"Adding tool {i}: {json.dumps({'Type': str(type(tool)), 'Name': getattr(tool, 'name', getattr(tool, 'tool_name', 'unknown')), 'Description': getattr(tool, 'description', getattr(tool, '__doc__', 'no description'))})}")
 
     # Build dynamic system prompt that includes information about available MCP tools
     system_prompt = build_system_prompt(user_mcp_tools)
+
+    logger.info(f"✅ Agent built successfully with {len(tools)} tools and session id {session_id}")
 
     return Agent(
         agent_id="ragbot2",

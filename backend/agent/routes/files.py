@@ -1,6 +1,7 @@
 """
 File upload and management routes for the RAGBot agent.
 """
+import json
 import logging
 from fastapi import APIRouter, HTTPException, Query
 from config import get_s3_client, KNOWLEDGE_SOURCE_BUCKET_NAME
@@ -16,8 +17,10 @@ def generate_presigned_url(
 ):
     """Generate a presigned URL for S3 file upload."""
     try:
+        logger.info(f"▶️ Generating presigned URL: {json.dumps({'userId': user_id, 'file': file_name})}")
+
         s3 = get_s3_client()
-        
+
         file_name_full = file_name
         if not file_name_full.endswith('.pdf'):
             file_name_full = f"{file_name}.pdf"
@@ -44,6 +47,8 @@ def generate_presigned_url(
             ExpiresIn=300,
             HttpMethod="PUT",
         )
+
+        logger.info(f"✅ Generated presigned URL: {json.dumps({'presignedUrl': presigned_url, 'key': key, 'bucket': KNOWLEDGE_SOURCE_BUCKET_NAME})}")
 
         return {
             "presignedurl": presigned_url,

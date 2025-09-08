@@ -45,7 +45,7 @@ async def get_user_tools(user_id: str):
             except Exception as e:
                 logger.error(f"Failed to get MCP tools: {str(e)}")
 
-        logger.info(f"✅ Found {tools_info.count} tools for user {user_id}: {tools_info}")
+        logger.info(f"✅ Found {len(tools_info)} tools for user {user_id}: {tools_info}")
         
         return {
             "tools": tools_info,
