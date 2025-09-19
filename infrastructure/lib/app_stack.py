@@ -207,6 +207,47 @@ class AppStack(Stack):
             )
         )
 
+        # Add permissions for AWS MCP servers (needed for credential validation and MCP operations)
+        # This allows the containerized MCP servers to access AWS services using the task role
+        # instead of requiring explicit AWS credentials from your local machine
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "sts:GetCallerIdentity",  # For credential validation
+                    "sts:AssumeRole",        # For cross-account access if needed
+                ],
+                resources=["*"],
+            )
+        )
+
+        # Add additional AWS service permissions that MCP servers might need
+        # Adjust these based on which AWS MCP servers you plan to use
+        task_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    # Common AWS service permissions for MCP servers
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeImages", 
+                    "ec2:DescribeSnapshots",
+                    "rds:DescribeDBInstances",
+                    "rds:DescribeDBClusters",
+                    "lambda:ListFunctions",
+                    "lambda:GetFunction",
+                    "cloudformation:DescribeStacks",
+                    "cloudformation:ListStacks",
+                    # Add more as needed based on your MCP servers
+                    "cost-optimization-hub:*",
+                    "ce:GetCostAndUsage",
+                    "ce:GetSavingsPlansCoverage",
+                    "ce:GetAnomalies",
+                    "compute-optimizer:GetEC2InstanceRecommendations"
+                    "freetier:GetFreeTierUsage",
+                    "budgets:ViewBudget",
+                ],
+                resources=["*"],
+            )
+        )
+
         # Create a task definition
         task_definition = ecs.FargateTaskDefinition(
             self, 
