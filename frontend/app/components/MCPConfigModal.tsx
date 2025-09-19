@@ -30,9 +30,10 @@ interface MCPConfigModalProps {
   userId: string;
   isOpen: boolean;
   onClose: () => void;
+  onConfigsSaved?: () => void;
 }
 
-export default function MCPConfigModal({ userId, isOpen, onClose }: MCPConfigModalProps) {
+export default function MCPConfigModal({ userId, isOpen, onClose, onConfigsSaved }: MCPConfigModalProps) {
   const [configs, setConfigs] = useState<MCPServerConfig[]>([]);
   const [envVarsInput, setEnvVarsInput] = useState<Record<number, string>>({});
   const [tools, setTools] = useState<MCPTool[]>([]);
@@ -125,6 +126,9 @@ export default function MCPConfigModal({ userId, isOpen, onClose }: MCPConfigMod
       if (data.success) {
         // Load tools after successful save
         await loadTools();
+        // Notify parent component that configs were saved
+        console.log('MCP configs saved successfully, triggering tools refresh...');
+        onConfigsSaved?.();
       } else {
         setError('Failed to save configurations');
       }

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { User, LogOut, Settings } from 'lucide-react';
 import { AuthUser } from 'aws-amplify/auth';
 import { AuthEventData } from '@aws-amplify/ui';
 import MCPConfigModal from './MCPConfigModal';
+import { triggerToolsRefresh } from '../contexts/ToolsContext';
 
 interface UserProfileDropdownProps {
   user: AuthUser;
@@ -18,6 +19,11 @@ export default function UserProfileDropdown({ user, signOut }: UserProfileDropdo
 
   const userName = user.signInDetails?.loginId || user.username || 'User';
   const userId = user.userId || user.username || '';
+
+  const handleConfigsSaved = useCallback(() => {
+    console.log('handleConfigsSaved called');
+    triggerToolsRefresh();
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -78,7 +84,12 @@ export default function UserProfileDropdown({ user, signOut }: UserProfileDropdo
         )}
       </div>
 
-      <MCPConfigModal userId={userId} isOpen={showMCPConfig} onClose={() => setShowMCPConfig(false)} />
+      <MCPConfigModal
+        userId={userId}
+        isOpen={showMCPConfig}
+        onClose={() => setShowMCPConfig(false)}
+        onConfigsSaved={handleConfigsSaved}
+      />
     </>
   );
 }
