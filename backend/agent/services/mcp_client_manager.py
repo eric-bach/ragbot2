@@ -45,6 +45,187 @@ class MCPClientManager:
             return False
         return (time.time() - self._cache_timestamps[cache_key]) < self._cache_ttl
     
+    def _ensure_aws_credentials(self, config: MCPServerConfig, env: Dict[str, str]) -> None:
+        """Ensure AWS credentials are available for AWS MCP servers"""
+        try:
+            # Check if this appears to be an AWS MCP server
+            is_aws_server = (
+                'aws' in config.name.lower() or
+                (config.args and any('aws' in str(arg).lower() for arg in config.args)) or
+                (config.command and 'aws' in config.command.lower())
+            )
+            
+            if not is_aws_server:
+                return
+                
+            logger.info(f"Detected AWS MCP server: {config.name}, ensuring AWS credentials are available")
+            
+            # Check if AWS credentials are already set in config env_vars
+            aws_env_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'AWS_PROFILE']
+            has_aws_credentials = config.env_vars and any(key in config.env_vars for key in aws_env_vars)
+            
+            if has_aws_credentials:
+                logger.info(f"AWS credentials found in MCP server configuration for {config.name}")
+                return
+                
+            # Check if AWS credentials are available in host environment
+            host_has_credentials = any(key in os.environ for key in aws_env_vars)
+            
+            if host_has_credentials:
+                logger.info(f"Inheriting AWS credentials from host environment for {config.name}")
+                # Copy AWS-related environment variables from host
+                for key in aws_env_vars:
+                    if key in os.environ:
+                        env[key] = os.environ[key]
+                        
+                # Also copy AWS region if not already set
+                if 'AWS_REGION' in os.environ and 'AWS_REGION' not in env:
+                    env['AWS_REGION'] = os.environ['AWS_REGION']
+                    
+                # Copy AWS default region as fallback
+                if 'AWS_DEFAULT_REGION' in os.environ and 'AWS_DEFAULT_REGION' not in env:
+                    env['AWS_DEFAULT_REGION'] = os.environ['AWS_DEFAULT_REGION']
+                    
+                # Validate that we have the minimum required credentials
+                self._validate_aws_credentials(env, config.name)
+                
+                # Check SSO status if using AWS profile (skip in containerized environments)
+                if not self._is_containerized_environment():
+                    self._check_aws_sso_status(config)
+            else:
+                # Check if we're in a containerized environment (ECS, etc.)
+                if self._is_containerized_environment():
+                    logger.info(f"Running in containerized environment for {config.name}. "
+                              "Assuming AWS credentials are provided via IAM role or container credentials.")
+                else:
+                    logger.warning(f"No AWS credentials found for AWS MCP server {config.name}. "
+                                 "Please configure credentials via environment variables or AWS SSO.")
+                             
+        except Exception as e:
+            logger.error(f"Error ensuring AWS credentials for {config.name}: {str(e)}")
+            # Don't fail the entire client creation, just log the error
+    
+    def _is_containerized_environment(self) -> bool:
+        """Check if we're running in a containerized environment like ECS"""
+        try:
+            # Check for ECS metadata endpoint
+            if os.environ.get('AWS_EXECUTION_ENV', '').startswith('AWS_ECS'):
+                return True
+                
+            # Check for ECS task metadata URI
+            if os.environ.get('ECS_CONTAINER_METADATA_URI_V4'):
+                return True
+                
+            # Check for general containerization indicators
+            if os.path.exists('/.dockerenv'):
+                return True
+                
+            # Check for Kubernetes environment
+            if os.environ.get('KUBERNETES_SERVICE_HOST'):
+                return True
+                
+            return False
+            
+        except Exception:
+            return False
+    
+
+    
+    def _validate_aws_credentials(self, env: Dict[str, str], server_name: str) -> bool:
+        """Validate that AWS credentials are properly configured"""
+        try:
+            import boto3
+            from botocore.exceptions import ClientError, NoCredentialsError
+            
+            # Check if we have either access keys or a profile
+            has_access_keys = (
+                env.get('AWS_ACCESS_KEY_ID') and 
+                env.get('AWS_SECRET_ACCESS_KEY')
+            )
+            has_profile = env.get('AWS_PROFILE')
+            
+            if not has_access_keys and not has_profile:
+                logger.warning(f"AWS MCP server {server_name} has no credentials configured")
+                return False
+            
+            # Try to create a simple AWS client to validate credentials
+            # We'll use a minimal environment for testing
+            test_env = {k: v for k, v in env.items() if k.startswith('AWS_')}
+            
+            # Temporarily set environment variables for validation
+            old_env = {}
+            for key, value in test_env.items():
+                old_env[key] = os.environ.get(key)
+                os.environ[key] = value
+            
+            try:
+                # Create a simple STS client to validate credentials
+                session = boto3.Session()
+                sts_client = session.client('sts')
+                
+                # Try to get caller identity - this will fail if credentials are invalid
+                response = sts_client.get_caller_identity()
+                logger.info(f"AWS credentials validated for {server_name}. "
+                           f"Account: {response.get('Account', 'unknown')}, "
+                           f"User: {response.get('Arn', 'unknown')}")
+                return True
+                
+            except (ClientError, NoCredentialsError) as e:
+                logger.warning(f"AWS credential validation failed for {server_name}: {str(e)}")
+                return False
+                
+            finally:
+                # Restore original environment
+                for key in test_env.keys():
+                    if old_env[key] is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = old_env[key]
+                        
+        except ImportError:
+            logger.info(f"boto3 not available for credential validation for {server_name}")
+            return True  # Assume valid if we can't validate
+        except Exception as e:
+            logger.warning(f"Error validating AWS credentials for {server_name}: {str(e)}")
+            return True  # Don't block on validation errors
+    
+    def _check_aws_sso_status(self, config: MCPServerConfig) -> bool:
+        """Check if AWS SSO credentials need refresh"""
+        try:
+            import subprocess
+            import json
+            
+            # Only check if using AWS_PROFILE
+            profile = None
+            if config.env_vars and 'AWS_PROFILE' in config.env_vars:
+                profile = config.env_vars['AWS_PROFILE']
+            elif 'AWS_PROFILE' in os.environ:
+                profile = os.environ['AWS_PROFILE']
+                
+            if not profile:
+                return True  # Not using SSO profile
+                
+            # Check SSO status
+            result = subprocess.run(
+                ['aws', 'sts', 'get-caller-identity', '--profile', profile],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                logger.info(f"AWS SSO credentials are valid for profile {profile}")
+                return True
+            else:
+                logger.warning(f"AWS SSO credentials may need refresh for profile {profile}. "
+                             f"Run 'aws sso login --profile {profile}' to refresh.")
+                return False
+                
+        except Exception as e:
+            # Handle all exceptions (subprocess errors, import errors, etc.)
+            logger.debug(f"Could not check AWS SSO status for {config.name}: {str(e)}")
+            return True  # Assume valid if we can't check
+    
     def _create_stdio_client(self, config: MCPServerConfig) -> Optional[MCPClient]:
         """Create a stdio MCP client from configuration"""
         try:
@@ -57,6 +238,10 @@ class MCPClientManager:
 
             # Set environment variables if specified
             env = os.environ.copy()
+            
+            # Automatically inherit AWS credentials if this appears to be an AWS MCP server
+            self._ensure_aws_credentials(config, env)
+            
             if config.env_vars:
                 env.update(config.env_vars)
 
@@ -72,17 +257,16 @@ class MCPClientManager:
                     # If shlex fails, fallback to simple split
                     args = args[0].split()
 
-            logger.info(f"Initializing MCP client: {json.dumps({'command': command, 'args': ' '.join(args), 'env': env})}")
+            logger.info(f"Initializing MCP client: {json.dumps({'command': command, 'args': ' '.join(args), 'env_vars_count': len(env)})}")
 
-            # Verify command exists before creating client
+            # Enhanced logging for debugging - but still proceed even if command not found locally
             import shutil
             command_path = shutil.which(command)
             if not command_path:
-                logger.error(f"Command '{command}' not found in PATH for MCP server {config.name}")
-                logger.info(f"Available commands in PATH: {[shutil.which(cmd) for cmd in ['python', 'python3', 'node', 'npm', 'npx', 'uvx'] if shutil.which(cmd)]}")
-                return None
-                
-            logger.debug(f"Command '{command}' found at: {command_path}")
+                logger.warning(f"Command '{command}' not found in PATH check (this may be normal in containers)")
+                logger.info(f"Proceeding anyway - MCP server process will show actual availability")
+            else:
+                logger.info(f"Command '{command}' found at: {command_path}")
 
             # Add timeout to prevent hanging connections
             client = MCPClient(lambda: stdio_client(
@@ -98,6 +282,11 @@ class MCPClientManager:
 
         except Exception as e:
             logger.error(f"🛑 Failed to create stdio MCP client for {config.name}: {str(e)}")
+            logger.error(f"🛑 MCP client config details: command='{config.command}', args={config.args}, env_vars={list(config.env_vars.keys()) if config.env_vars else []}")
+            
+            # Log more details about the error
+            import traceback
+            logger.error(f"🛑 Full traceback: {traceback.format_exc()}")
             return None
     
     def _create_sse_client(self, config: MCPServerConfig) -> Optional[MCPClient]:
@@ -165,16 +354,23 @@ class MCPClientManager:
         for i, client in enumerate(clients):
             try:
                 server_name = user_configs[i].name if i < len(user_configs) else f"Client {i+1}"
+                config = user_configs[i] if i < len(user_configs) else None
+                
                 logger.info(f"Starting MCP client {i+1}/{len(clients)}: {server_name}")
+                if config:
+                    logger.info(f"  - Command: {config.command}")
+                    logger.info(f"  - Args: {config.args}")
+                    logger.info(f"  - Env vars: {list(config.env_vars.keys()) if config.env_vars else []}")
 
                 # Use asyncio wait_for to prevent hanging
+                logger.info(f"Calling client.__enter__ for {server_name}")
                 await asyncio.wait_for(
                     asyncio.get_event_loop().run_in_executor(None, client.__enter__),
                     timeout=10.0  # 10 second timeout
                 )
                 active_clients.append(client)
 
-                logger.info(f"🛠️ Successfully started MCP client {i+1}")
+                logger.info(f"🛠️ Successfully started MCP client {i+1}: {server_name}")
             except asyncio.TimeoutError:
                 error_msg = f"Timeout starting MCP client {i+1} after 10 seconds"
                 logger.error(f"❌ {error_msg}")
@@ -184,10 +380,21 @@ class MCPClientManager:
                     "type": "timeout"
                 })
             except Exception as e:
-                error_msg = f"Failed to start MCP client {i+1}: {str(e)}"
-                logger.error(f"❌ {error_msg}", exc_info=True)
+                server_name = user_configs[i].name if i < len(user_configs) else f"Client {i+1}"
+                config = user_configs[i] if i < len(user_configs) else None
+                
+                error_msg = f"Failed to start MCP client {i+1} ({server_name}): {str(e)}"
+                logger.error(f"❌ {error_msg}")
+                
+                if config:
+                    logger.error(f"❌ Failed config details: command='{config.command}', args={config.args}")
+                
+                # Log the full exception for debugging
+                import traceback
+                logger.error(f"❌ Full exception traceback: {traceback.format_exc()}")
+                
                 mcp_errors.append({
-                    "server_name": user_configs[i].name if i < len(user_configs) else f"Client {i+1}",
+                    "server_name": server_name,
                     "error": str(e),
                     "type": "startup_error"
                 })
