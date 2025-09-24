@@ -20,8 +20,10 @@ import { AuthEventData } from '@aws-amplify/ui';
 
 import '@aws-amplify/ui-react/styles.css';
 import UserProfileDropdown from '../components/UserProfileDropdown';
+import SessionSidebar from '../components/SessionSidebar';
+import { SessionProvider, useSessionContext } from '../contexts/SessionContext';
 import { Turnstile } from 'next-turnstile';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Menu } from 'lucide-react';
 
 interface ChatLayoutProps {
   children: React.ReactNode;
@@ -29,29 +31,82 @@ interface ChatLayoutProps {
   user?: AuthUser | undefined;
 }
 
-function ChatLayout({ children, signOut, user }: ChatLayoutProps) {
+function ChatLayoutContent({ children, signOut, user }: ChatLayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(true); // Open by default on desktop
+  const { currentSessionId, createNewSession, loadSession } = useSessionContext();
+
   if (!signOut || !user) {
     return <>{children}</>;
   }
+
+  const handleSessionSelect = (sessionId: string) => {
+    loadSession(sessionId);
+    // Close sidebar on mobile after selection
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
+  };
+
+  const handleNewSession = () => {
+    createNewSession();
+    // Close sidebar on mobile after creating new session
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
+  };
 
   return (
     <div className='h-screen flex flex-col'>
       {/* Navbar */}
       <nav className='flex-shrink-0 bg-card border-b border-border px-4 py-3'>
-        <div className='max-w-4xl mx-auto flex items-center justify-between'>
-          <Link href='/' className='href'>
-            <div className='flex items-center space-x-3'>
-              <Image src='/logo.png' alt='RAGBot Logo' className='w-8 h-8' width={32} height={32} />
-              <h1 className='text-xl font-semibold'>RAGBot 2</h1>
-            </div>
-          </Link>
+        <div className='flex items-center justify-between'>
+          <div className='flex items-center space-x-3'>
+            {/* Sidebar toggle button */}
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className='p-2 hover:bg-muted rounded-md transition-colors'
+              aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            >
+              <Menu size={20} />
+            </button>
+
+            <Link href='/' className='href'>
+              <div className='flex items-center space-x-3'>
+                <Image src='/logo.png' alt='RAGBot Logo' className='w-8 h-8' width={32} height={32} />
+                <h1 className='text-xl font-semibold'>RAGBot 2</h1>
+              </div>
+            </Link>
+          </div>
           <UserProfileDropdown user={user} signOut={signOut} />
         </div>
       </nav>
 
-      {/* Content */}
-      <div className='flex-1 overflow-hidden'>{children}</div>
+      {/* Main Content Area with Sidebar */}
+      <div className='flex-1 flex overflow-hidden'>
+        {/* Session Sidebar */}
+        <SessionSidebar
+          userId={user.userId}
+          currentSessionId={currentSessionId}
+          onSessionSelect={handleSessionSelect}
+          onNewSession={handleNewSession}
+          isOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+        />
+
+        {/* Main Chat Area */}
+        <div className={`flex-1 overflow-hidden transition-all duration-200 ${sidebarOpen ? 'ml-0' : 'ml-0'}`}>
+          {children}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function ChatLayout({ children, signOut, user }: ChatLayoutProps) {
+  return (
+    <SessionProvider>
+      <ChatLayoutContent children={children} signOut={signOut} user={user} />
+    </SessionProvider>
   );
 }
 

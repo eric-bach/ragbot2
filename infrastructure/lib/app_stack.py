@@ -240,7 +240,7 @@ class AppStack(Stack):
                     "ce:GetCostAndUsage",
                     "ce:GetSavingsPlansCoverage",
                     "ce:GetAnomalies",
-                    "compute-optimizer:GetEC2InstanceRecommendations"
+                    "compute-optimizer:GetEC2InstanceRecommendations",
                     "freetier:GetFreeTierUsage",
                     "budgets:ViewBudget",
                 ],
