@@ -7,6 +7,8 @@ import ToolsButton from '../components/ToolsButton';
 import UploadButton from '../components/UploadButton';
 import TabbedResponse from '../components/TabbedResponse';
 import { useTools } from '../hooks/useTools';
+import { useSessionContext } from '../contexts/SessionContext';
+import { useSessions } from '../hooks/useSessions';
 
 interface Message {
   id: string;
@@ -20,26 +22,65 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId, setSessionId] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { currentSessionId, ensureSession, createNewSession } = useSessionContext();
   const { tools, loading: toolsLoading, error: toolsError } = useTools(userId);
+  const { loadSessions } = useSessions(userId);
 
-  // Generate session ID on component mount
+  // Get user ID only - don't create session yet
   useEffect(() => {
-    const getSessionId = async () => {
+    const initializeUser = async () => {
       try {
         const { userId } = await getCurrentUser();
-
         setUserId(userId);
-        setSessionId(crypto.randomUUID());
       } catch (error) {
         console.error('Error getting user ID:', error);
       }
     };
 
-    getSessionId();
+    initializeUser();
   }, []);
+
+  // Load chat history when session changes
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!currentSessionId || !userId) return;
+
+      try {
+        console.log('Loading chat history for session:', currentSessionId);
+        const response = await fetch(`/api/sessions/${userId}/${currentSessionId}`);
+        if (response.ok) {
+          const sessionData = await response.json();
+          console.log('Found session data:', sessionData);
+          if (sessionData.conversation && sessionData.conversation.length > 0) {
+            // Convert backend format to frontend Message format
+            const loadedMessages: Message[] = sessionData.conversation.map((msg: any, index: number) => ({
+              id: `${currentSessionId}-${index}`,
+              content: msg.content,
+              role: msg.role,
+              timestamp: new Date(msg.timestamp),
+            }));
+
+            console.log('Found session chat messages:', loadedMessages);
+            setMessages(loadedMessages);
+          } else {
+            // New session, clear messages
+            setMessages([]);
+          }
+        } else {
+          // Session doesn't exist yet or error loading - start fresh
+          setMessages([]);
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+        // Start fresh on error
+        setMessages([]);
+      }
+    };
+
+    loadChatHistory();
+  }, [currentSessionId, userId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -50,10 +91,10 @@ export default function Home() {
   };
 
   const clearChat = async () => {
-    if (sessionId) {
+    if (currentSessionId) {
       try {
         // Clear session on backend using API route
-        const response = await fetch(`/api/session?userId=${userId}&sessionId=${sessionId}`, {
+        const response = await fetch(`/api/session?userId=${userId}&sessionId=${currentSessionId}`, {
           method: 'DELETE',
         });
 
@@ -69,18 +110,17 @@ export default function Home() {
       }
     }
 
-    // Clear messages locally
+    // Clear messages locally and create new session
     setMessages([]);
-
-    // Generate new session ID
-    const newSessionId = crypto.randomUUID();
-    setSessionId(newSessionId);
-    console.log('Generated new session ID after clear:', newSessionId);
+    createNewSession();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim() || isLoading) return;
+
+    // Ensure we have a session before sending the message
+    const sessionId = ensureSession();
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -166,6 +206,15 @@ export default function Home() {
               prev.map((msg) => (msg.id === assistantMessage.id ? { ...msg, isStreaming: false } : msg))
             );
 
+            // Refresh sessions list to show the newly created session with proper metadata
+            try {
+              console.log('Refreshing sessions after message completion...');
+              await loadSessions();
+              console.log('Sessions refreshed successfully');
+            } catch (error) {
+              console.error('Failed to refresh sessions after message:', error);
+            }
+
             break;
           }
 
@@ -241,7 +290,7 @@ export default function Home() {
               ) : (
                 <p className='text-xs mt-2'>Tools loaded: {tools.length} available</p>
               )}
-              {sessionId && <p className='text-xs mt-1 text-muted-foreground'>Session: {sessionId}</p>}
+              {currentSessionId && <p className='text-xs mt-1 text-muted-foreground'>Session: {currentSessionId}</p>}
             </div>
           </div>
         )}

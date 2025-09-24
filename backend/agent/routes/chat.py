@@ -8,11 +8,13 @@ from fastapi.responses import StreamingResponse
 from models.chat import ChatRequest
 from services.agent_service import build_agent_for_session
 from services.mcp_client_manager import mcp_client_manager
+from services.session_service import SessionService
 from config import get_mcp_config_store
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+session_service = SessionService()
 
 @router.post('/chat')
 async def chat(request: ChatRequest):
@@ -34,6 +36,12 @@ async def chat(request: ChatRequest):
             # Get user's MCP configuration
             user_config = await mcp_config_store.get_user_config(user_id)
             user_mcp_configs = user_config.servers if user_config else []
+            
+            # Update session metadata before processing
+            try:
+                await session_service.update_session_metadata(user_id, session_id, message_count_delta=1)
+            except Exception as e:
+                logger.warning(f"Failed to update session metadata: {str(e)}")
         
             # Handle MCP tools with proper async context management
             if user_mcp_configs:
@@ -60,6 +68,13 @@ async def chat(request: ChatRequest):
                                     logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
                                 yield event['data']
                         logger.info(f"✅ Streaming response complete - total chunks: {chunk_count}")
+                        
+                        # Auto-generate title for new sessions (if this is the first user message)
+                        try:
+                            await session_service.auto_generate_session_title(user_id, session_id, query)
+                        except Exception as e:
+                            logger.warning(f"Failed to auto-generate session title: {str(e)}")
+                            
                     except Exception as e:
                         logger.error(f"Error in agent stream: {str(e)}")
                         yield f"Error: {str(e)}"
@@ -80,6 +95,13 @@ async def chat(request: ChatRequest):
                                 logger.info(f"Streamed {chunk_count} chunks so far for session {session_id}")
                             yield event['data']
                     logger.info(f"✅ Streaming response complete - total chunks: {chunk_count}")
+                    
+                    # Auto-generate title for new sessions (if this is the first user message)
+                    try:
+                        await session_service.auto_generate_session_title(user_id, session_id, query)
+                    except Exception as e:
+                        logger.warning(f"Failed to auto-generate session title: {str(e)}")
+                        
                 except Exception as e:
                     logger.error(f"Error in agent stream: {str(e)}")
                     yield f"Error: {str(e)}"

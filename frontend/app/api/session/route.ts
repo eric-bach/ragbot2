@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// This route is deprecated - use /api/sessions/[userId]/[sessionId] instead
+// Keeping for backward compatibility
 export async function DELETE(request: NextRequest) {
   try {
-    console.log('Session DELETE API route called');
+    console.log('Legacy Session DELETE API route called - consider using /api/sessions/[userId]/[sessionId]');
 
     // Extract userId and sessionId from URL search params
     const { searchParams } = new URL(request.url);
