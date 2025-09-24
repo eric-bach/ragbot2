@@ -8,7 +8,7 @@ import UploadButton from '../components/UploadButton';
 import TabbedResponse from '../components/TabbedResponse';
 import { useTools } from '../hooks/useTools';
 import { useSessionContext } from '../contexts/SessionContext';
-import { useSessions } from '../hooks/useSessions';
+import { useSessions, SessionMessage } from '../hooks/useSessions';
 
 interface Message {
   id: string;
@@ -55,7 +55,7 @@ export default function Home() {
           console.log('Found session data:', sessionData);
           if (sessionData.conversation && sessionData.conversation.length > 0) {
             // Convert backend format to frontend Message format
-            const loadedMessages: Message[] = sessionData.conversation.map((msg: any, index: number) => ({
+            const loadedMessages: Message[] = sessionData.conversation.map((msg: SessionMessage, index: number) => ({
               id: `${currentSessionId}-${index}`,
               content: msg.content,
               role: msg.role,

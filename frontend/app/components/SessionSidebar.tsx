@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, MessageSquare, Edit2, Trash2, X, Check, Menu, ChevronLeft } from 'lucide-react';
+import { Plus, MessageSquare, Edit2, Trash2, X, Check, ChevronLeft } from 'lucide-react';
 import { Session, useSessions } from '../hooks/useSessions';
 
 interface SessionSidebarProps {
