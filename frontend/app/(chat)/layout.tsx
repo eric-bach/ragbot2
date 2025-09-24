@@ -105,7 +105,9 @@ function ChatLayoutContent({ children, signOut, user }: ChatLayoutProps) {
 function ChatLayout({ children, signOut, user }: ChatLayoutProps) {
   return (
     <SessionProvider>
-      <ChatLayoutContent children={children} signOut={signOut} user={user} />
+      <ChatLayoutContent signOut={signOut} user={user}>
+        {children}
+      </ChatLayoutContent>
     </SessionProvider>
   );
 }

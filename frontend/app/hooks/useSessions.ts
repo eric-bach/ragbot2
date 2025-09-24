@@ -1,5 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 
+export interface SessionMessage {
+  content: string;
+  role: 'user' | 'assistant';
+  timestamp: string;
+}
+
 export interface Session {
   session_id: string;
   user_id: string;
@@ -10,7 +16,7 @@ export interface Session {
 }
 
 export interface SessionWithHistory extends Session {
-  messages: any[];
+  messages: SessionMessage[];
 }
 
 export interface CreateSessionRequest {
