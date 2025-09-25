@@ -22,6 +22,8 @@ import '@aws-amplify/ui-react/styles.css';
 import UserProfileDropdown from '../components/UserProfileDropdown';
 import SessionSidebar from '../components/SessionSidebar';
 import { SessionProvider, useSessionContext } from '../contexts/SessionContext';
+import { SessionActionsProvider } from '../contexts/SessionActionsContext';
+import { useSessions } from '../hooks/useSessions';
 import { Turnstile } from 'next-turnstile';
 import { AlertCircle, Menu } from 'lucide-react';
 
@@ -34,6 +36,17 @@ interface ChatLayoutProps {
 function ChatLayoutContent({ children, signOut, user }: ChatLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true); // Open by default on desktop
   const { currentSessionId, createNewSession, loadSession } = useSessionContext();
+  const {
+    sessions,
+    loading,
+    error,
+    createSession,
+    updateSessionTitle,
+    deleteSession,
+    clearError,
+    addSessionToList,
+    updateSessionMessageCount,
+  } = useSessions(user?.userId || '');
 
   if (!signOut || !user) {
     return <>{children}</>;
@@ -91,11 +104,24 @@ function ChatLayoutContent({ children, signOut, user }: ChatLayoutProps) {
           onNewSession={handleNewSession}
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(!sidebarOpen)}
+          sessions={sessions}
+          loading={loading}
+          error={error}
+          createSession={createSession}
+          updateSessionTitle={updateSessionTitle}
+          deleteSession={deleteSession}
+          clearError={clearError}
         />
 
         {/* Main Chat Area */}
         <div className={`flex-1 overflow-hidden transition-all duration-200 ${sidebarOpen ? 'ml-0' : 'ml-0'}`}>
-          {children}
+          <SessionActionsProvider
+            addSessionToList={addSessionToList}
+            updateSessionMessageCount={updateSessionMessageCount}
+            createSession={createSession}
+          >
+            {children}
+          </SessionActionsProvider>
         </div>
       </div>
     </div>
