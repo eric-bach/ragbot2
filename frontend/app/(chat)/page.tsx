@@ -8,7 +8,8 @@ import UploadButton from '../components/UploadButton';
 import TabbedResponse from '../components/TabbedResponse';
 import { useTools } from '../hooks/useTools';
 import { useSessionContext } from '../contexts/SessionContext';
-import { useSessions, SessionMessage } from '../hooks/useSessions';
+import { useSessionActions } from '../contexts/SessionActionsContext';
+import { SessionMessage } from '../hooks/useSessions';
 
 interface Message {
   id: string;
@@ -24,9 +25,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { currentSessionId, ensureSession, createNewSession } = useSessionContext();
+  const { currentSessionId, ensureSession, createNewSession, loadSession } = useSessionContext();
   const { tools, loading: toolsLoading, error: toolsError } = useTools(userId);
-  const { loadSessions } = useSessions(userId);
+  const { addSessionToList, updateSessionMessageCount, createSession } = useSessionActions();
 
   // Get user ID only - don't create session yet
   useEffect(() => {
@@ -45,7 +46,17 @@ export default function Home() {
   // Load chat history when session changes
   useEffect(() => {
     const loadChatHistory = async () => {
-      if (!currentSessionId || !userId) return;
+      // If no session ID, clear messages (e.g., after session deletion)
+      if (!currentSessionId) {
+        console.log('No current session, clearing messages');
+        setMessages([]);
+        return;
+      }
+
+      if (!userId) return;
+
+      // Don't clear messages if we're in the middle of loading
+      if (isLoading) return;
 
       try {
         console.log('Loading chat history for session:', currentSessionId);
@@ -65,22 +76,21 @@ export default function Home() {
             console.log('Found session chat messages:', loadedMessages);
             setMessages(loadedMessages);
           } else {
-            // New session, clear messages
-            setMessages([]);
+            // Only clear messages if we don't have any current messages
+            setMessages((prevMessages) => (prevMessages.length === 0 ? [] : prevMessages));
           }
         } else {
-          // Session doesn't exist yet or error loading - start fresh
-          setMessages([]);
+          // Only clear messages if we don't have any current messages (to avoid clearing during new session creation)
+          setMessages((prevMessages) => (prevMessages.length === 0 ? [] : prevMessages));
         }
       } catch (error) {
         console.error('Error loading chat history:', error);
-        // Start fresh on error
-        setMessages([]);
+        // Don't clear messages on error to avoid losing user input
       }
     };
 
     loadChatHistory();
-  }, [currentSessionId, userId]);
+  }, [currentSessionId, userId, isLoading]);
 
   useEffect(() => {
     scrollToBottom();
@@ -119,8 +129,43 @@ export default function Home() {
     e.preventDefault();
     if (!inputValue.trim() || isLoading) return;
 
-    // Ensure we have a session before sending the message
-    const sessionId = ensureSession();
+    // Create a title from the first part of the user's message
+    const generateSessionTitle = (message: string, maxLength: number = 50): string => {
+      const trimmed = message.trim();
+      if (trimmed.length <= maxLength) {
+        return trimmed;
+      }
+      // Find the last space before maxLength to avoid cutting words
+      const truncated = trimmed.substring(0, maxLength);
+      const lastSpace = truncated.lastIndexOf(' ');
+      if (lastSpace > maxLength * 0.6) {
+        // Only use space if it's not too early
+        return truncated.substring(0, lastSpace) + '...';
+      }
+      return truncated + '...';
+    };
+
+    let sessionId = currentSessionId;
+
+    // If no current session, create one with the message title
+    if (!sessionId) {
+      const sessionTitle = generateSessionTitle(inputValue.trim());
+
+      try {
+        const newSession = await createSession(sessionTitle);
+        if (newSession) {
+          sessionId = newSession.session_id;
+          loadSession(sessionId);
+          // Session is automatically added to the list by the createSession function
+          console.log('Created new session with title:', sessionTitle);
+        } else {
+          throw new Error('Failed to create session');
+        }
+      } catch (error) {
+        console.error('Error creating session:', error);
+        return;
+      }
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -207,13 +252,8 @@ export default function Home() {
             );
 
             // Refresh sessions list to show the newly created session with proper metadata
-            try {
-              console.log('Refreshing sessions after message completion...');
-              await loadSessions();
-              console.log('Sessions refreshed successfully');
-            } catch (error) {
-              console.error('Failed to refresh sessions after message:', error);
-            }
+            // Sessions are now managed centrally in the layout component
+            console.log('Message completed for session:', sessionId);
 
             break;
           }

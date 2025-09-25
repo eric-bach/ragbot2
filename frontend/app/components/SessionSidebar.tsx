@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plus, MessageSquare, Edit2, Trash2, X, Check, ChevronLeft } from 'lucide-react';
-import { Session, useSessions } from '../hooks/useSessions';
+import { Plus, Edit2, Trash2, X, Check, ChevronLeft, MessageCircle } from 'lucide-react';
+import { Session } from '../hooks/useSessions';
 
 interface SessionSidebarProps {
   userId: string;
@@ -12,6 +12,13 @@ interface SessionSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   className?: string;
+  sessions: Session[];
+  loading: boolean;
+  error: string | null;
+  createSession: (title?: string) => Promise<Session | null>;
+  updateSessionTitle: (sessionId: string, title: string) => Promise<boolean>;
+  deleteSession: (sessionId: string) => Promise<boolean>;
+  clearError: () => void;
 }
 
 interface SessionItemProps {
@@ -128,9 +135,6 @@ function SessionItem({ session, isActive, onSelect, onDelete, onTitleUpdate }: S
             <>
               <h3 className='text-sm font-medium text-gray-900 truncate pr-2'>{session.title}</h3>
               <div className='flex items-center gap-2 mt-1 text-xs text-gray-500'>
-                <MessageSquare size={12} />
-                <span>{session.message_count} messages</span>
-                <span>•</span>
                 <span>{formatDate(session.updated_at)}</span>
               </div>
             </>
@@ -168,10 +172,14 @@ export default function SessionSidebar({
   isOpen,
   onToggle,
   className = '',
+  sessions,
+  loading,
+  error,
+  createSession,
+  updateSessionTitle,
+  deleteSession,
+  clearError,
 }: SessionSidebarProps) {
-  const { sessions, loading, error, createSession, updateSessionTitle, deleteSession, clearError } =
-    useSessions(userId);
-
   const [isCreating, setIsCreating] = useState(false);
 
   const handleNewSession = async () => {
@@ -202,10 +210,14 @@ export default function SessionSidebar({
   const handleDeleteSession = async (sessionId: string) => {
     console.log('Deleting session:', sessionId);
 
-    const success = await deleteSession(sessionId);
-    if (success && currentSessionId === sessionId) {
-      // If we deleted the current session, clear the current session without creating a new one
-      onSessionSelect('');
+    try {
+      await deleteSession(sessionId);
+      if (currentSessionId === sessionId) {
+        // If we deleted the current session, clear the current session without creating a new one
+        onSessionSelect('');
+      }
+    } catch (error) {
+      console.error('Failed to delete session:', error);
     }
   };
 
@@ -322,7 +334,7 @@ export default function SessionSidebar({
             </div>
           ) : sessions.length === 0 ? (
             <div className='flex flex-col items-center justify-center h-32 text-gray-500'>
-              <MessageSquare size={32} className='mb-2' />
+              <MessageCircle size={32} className='mb-2' />
               <p className='text-sm'>No chat history yet</p>
               <p className='text-xs'>Start a conversation to see your sessions</p>
             </div>

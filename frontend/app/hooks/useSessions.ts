@@ -33,6 +33,8 @@ export interface UseSessions {
   loadSession: (sessionId: string) => Promise<SessionWithHistory | null>;
   updateSessionTitle: (sessionId: string, title: string) => Promise<boolean>;
   deleteSession: (sessionId: string) => Promise<boolean>;
+  addSessionToList: (session: Session) => void;
+  updateSessionMessageCount: (sessionId: string, messageCount: number) => void;
   clearError: () => void;
 }
 
@@ -234,6 +236,43 @@ export function useSessions(userId: string): UseSessions {
     [userId, currentSession]
   );
 
+  const addSessionToList = useCallback((session: Session) => {
+    console.log('Adding session to list:', session);
+    setSessions((prevSessions) => {
+      console.log('Previous sessions:', prevSessions.length);
+      // Check if session already exists to avoid duplicates
+      const exists = prevSessions.some((s) => s.session_id === session.session_id);
+      if (exists) {
+        console.log('Session already exists, skipping');
+        return prevSessions;
+      }
+
+      // Add new session and sort by updated_at (most recent first)
+      const updatedSessions = [session, ...prevSessions];
+      const sortedSessions = updatedSessions.sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      );
+      console.log('Added session, new total:', sortedSessions.length);
+      return sortedSessions;
+    });
+  }, []);
+
+  const updateSessionMessageCount = useCallback((sessionId: string, messageCount: number) => {
+    console.log('Updating message count for session:', sessionId, 'to:', messageCount);
+    setSessions((prevSessions) => {
+      return prevSessions.map((session) => {
+        if (session.session_id === sessionId) {
+          return {
+            ...session,
+            message_count: messageCount,
+            updated_at: new Date().toISOString(),
+          };
+        }
+        return session;
+      });
+    });
+  }, []);
+
   // Load sessions when userId changes
   useEffect(() => {
     if (userId) {
@@ -251,6 +290,8 @@ export function useSessions(userId: string): UseSessions {
     loadSession,
     updateSessionTitle,
     deleteSession,
+    addSessionToList,
+    updateSessionMessageCount,
     clearError,
   };
 }
