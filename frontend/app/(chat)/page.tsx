@@ -76,12 +76,14 @@ export default function Home() {
             console.log('Found session chat messages:', loadedMessages);
             setMessages(loadedMessages);
           } else {
-            // Only clear messages if we don't have any current messages
-            setMessages((prevMessages) => (prevMessages.length === 0 ? [] : prevMessages));
+            // Clear messages for new/empty session
+            console.log('No conversation history found, clearing messages for new session');
+            setMessages([]);
           }
         } else {
-          // Only clear messages if we don't have any current messages (to avoid clearing during new session creation)
-          setMessages((prevMessages) => (prevMessages.length === 0 ? [] : prevMessages));
+          // Clear messages for new session when backend doesn't have session data yet
+          console.log('Session not found in backend, clearing messages for new session');
+          setMessages([]);
         }
       } catch (error) {
         console.error('Error loading chat history:', error);

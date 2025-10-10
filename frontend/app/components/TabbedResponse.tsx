@@ -278,7 +278,7 @@ export default function TabbedResponse({ message }: TabbedResponseProps) {
 
         {/* Sources Section */}
         <CollapsibleSection
-          title={`Sources (${(rawSourcesContent.match(/- \w+:/g) || []).length})`}
+          title={`Sources (${(rawSourcesContent.match(/^\d+\./gm) || []).length})`}
           content={sourcesContent}
           isExpanded={expandedSections.sources}
           onToggle={() => toggleSection('sources')}
