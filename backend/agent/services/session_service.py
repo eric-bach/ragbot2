@@ -205,16 +205,20 @@ class SessionService:
                                 logger.warning(f"⚠️ Failed to load message from {obj['Key']}: {str(e)}")
                                 continue
                     
-                    # Process and group messages by conversation flow
+                    # Process messages using role changes to separate conversations
                     conversation_messages = []
-                    current_assistant_parts = []
-                    current_assistant_timestamp = None
+                    current_message_parts = []
+                    current_role = None
+                    current_timestamp = None
+                    current_message_id = None
                     
                     for file_key, message_data in raw_messages:
                         if 'message' in message_data:
                             message_content = message_data['message']
                             role = message_content.get('role', 'user')
                             content_parts = message_content.get('content', [])
+                            message_id = message_content.get('message_id', message_data.get('message_id'))
+                            timestamp = message_data.get('created_at', message_data.get('updated_at', ''))
                             
                             # Skip toolResult-only messages
                             if isinstance(content_parts, list):
@@ -222,71 +226,65 @@ class SessionService:
                                     logger.debug(f"⏭️ Skipping toolResult-only message from {file_key}")
                                     continue
                             
-                            if role == 'user':
-                                # Before processing user message, flush any pending assistant content
-                                if current_assistant_parts:
-                                    assistant_content = '\n\n'.join(current_assistant_parts).strip()
-                                    if assistant_content:
+                            # If role changed or message_id changed, flush previous message
+                            if (current_role is not None and 
+                                (role != current_role or 
+                                 (message_id and current_message_id and message_id != current_message_id))):
+                                
+                                # Flush accumulated content
+                                if current_message_parts:
+                                    final_content = '\n\n'.join(current_message_parts).strip()
+                                    if final_content:
                                         conversation_messages.append({
-                                            'role': 'assistant',
-                                            'content': assistant_content,
-                                            'timestamp': current_assistant_timestamp
+                                            'role': current_role,
+                                            'content': final_content,
+                                            'timestamp': current_timestamp
                                         })
-                                        logger.debug(f"📄 Merged assistant message with {len(current_assistant_parts)} parts")
-                                    current_assistant_parts = []
-                                    current_assistant_timestamp = None
+                                        logger.debug(f"📄 Flushed {current_role} message with {len(current_message_parts)} parts")
                                 
-                                # Process user message
-                                text_parts = []
-                                if isinstance(content_parts, list):
-                                    for part in content_parts:
-                                        if 'text' in part:
-                                            text_content = part['text'].strip()
-                                            if text_content:
-                                                text_parts.append(text_content)
-                                
-                                if text_parts:
-                                    final_text = '\n\n'.join(text_parts).strip()
-                                    conversation_messages.append({
-                                        'role': 'user',
-                                        'content': final_text,
-                                        'timestamp': message_data.get('created_at', message_data.get('updated_at', ''))
-                                    })
-                                    logger.debug(f"� Added user message from {file_key}: {final_text[:50]}...")
+                                # Reset for new message
+                                current_message_parts = []
+                                current_timestamp = None  # Reset timestamp for new message
                             
-                            elif role == 'assistant':
-                                # Collect assistant message parts for merging
-                                text_parts = []
-                                if isinstance(content_parts, list):
-                                    for part in content_parts:
-                                        if 'text' in part:
-                                            text_content = part['text'].strip()
-                                            if text_content:
-                                                text_parts.append(text_content)
-                                        elif 'toolUse' in part:
-                                            tool_name = part['toolUse'].get('name', 'unknown')
-                                            logger.debug(f"🔧 Assistant message includes tool use: {tool_name}")
-                                
-                                if text_parts:
-                                    current_assistant_parts.extend(text_parts)
-                                    if current_assistant_timestamp is None:
-                                        current_assistant_timestamp = message_data.get('created_at', message_data.get('updated_at', ''))
-                                    logger.debug(f"📄 Collected assistant parts from {file_key}")
+                            # Update current context
+                            current_role = role
+                            current_message_id = message_id
+                            # Set timestamp for this message (use first timestamp encountered for this message)
+                            if current_timestamp is None:
+                                current_timestamp = timestamp
+                            
+                            # Extract text content from this file
+                            text_parts = []
+                            if isinstance(content_parts, list):
+                                for part in content_parts:
+                                    if 'text' in part:
+                                        text_content = part['text'].strip()
+                                        if text_content:
+                                            text_parts.append(text_content)
+                                    elif 'toolUse' in part:
+                                        tool_name = part['toolUse'].get('name', 'unknown')
+                                        logger.debug(f"🔧 {role} message includes tool use: {tool_name}")
+                            
+                            # Add text parts to current message
+                            if text_parts:
+                                current_message_parts.extend(text_parts)
+                                logger.debug(f"📄 Added {len(text_parts)} parts to {role} message from {file_key}")
+                        
                         else:
                             # Fallback for messages that don't have the nested structure
                             conversation_messages.append(message_data)
                             logger.debug(f"📄 Loaded legacy message from {file_key}")
                     
-                    # Flush any remaining assistant content
-                    if current_assistant_parts:
-                        assistant_content = '\n\n'.join(current_assistant_parts).strip()
-                        if assistant_content:
+                    # Flush any remaining content
+                    if current_message_parts and current_role:
+                        final_content = '\n\n'.join(current_message_parts).strip()
+                        if final_content:
                             conversation_messages.append({
-                                'role': 'assistant',
-                                'content': assistant_content,
-                                'timestamp': current_assistant_timestamp
+                                'role': current_role,
+                                'content': final_content,
+                                'timestamp': current_timestamp
                             })
-                            logger.debug(f"📄 Final assistant message with {len(current_assistant_parts)} parts")
+                            logger.debug(f"📄 Final {current_role} message with {len(current_message_parts)} parts")
                     
                     messages = conversation_messages
                 else:
@@ -308,6 +306,11 @@ class SessionService:
             except Exception as e:
                 logger.error(f"🛑 Error loading messages: {str(e)}")
                 messages = []
+            
+            # Sort messages by timestamp to ensure chronological order
+            if messages:
+                messages.sort(key=lambda msg: msg.get('timestamp', ''))
+                logger.info(f"📅 Sorted {len(messages)} messages by timestamp")
             
             logger.info(f"✅ Retrieved session {session_id} for user {user_id} with {len(messages)} messages")
             

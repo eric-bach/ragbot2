@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Send, Trash2 } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { getCurrentUser } from 'aws-amplify/auth';
 import ToolsButton from '../components/ToolsButton';
 import UploadButton from '../components/UploadButton';
@@ -65,6 +65,8 @@ export default function Home() {
           const sessionData = await response.json();
           console.log('Found session data:', sessionData);
           if (sessionData.conversation && sessionData.conversation.length > 0) {
+            console.log('✅ Session messages:', sessionData.conversation);
+
             // Convert backend format to frontend Message format
             const loadedMessages: Message[] = sessionData.conversation.map((msg: SessionMessage, index: number) => ({
               id: `${currentSessionId}-${index}`,
@@ -73,7 +75,6 @@ export default function Home() {
               timestamp: new Date(msg.timestamp),
             }));
 
-            console.log('Found session chat messages:', loadedMessages);
             setMessages(loadedMessages);
           } else {
             // Clear messages for new/empty session
@@ -100,30 +101,6 @@ export default function Home() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const clearChat = async () => {
-    if (currentSessionId) {
-      try {
-        // Clear session on backend using API route
-        const response = await fetch(`/api/session?userId=${userId}&sessionId=${currentSessionId}`, {
-          method: 'DELETE',
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('Failed to clear session:', errorData);
-        } else {
-          const result = await response.json();
-          console.log('Session cleared:', result);
-        }
-      } catch (error) {
-        console.error('Failed to clear session on backend:', error);
-      }
-    }
-
-    // Only clear messages locally - keep the same session so new messages continue in the same chat history
-    setMessages([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -336,26 +313,28 @@ export default function Home() {
           </div>
         )}
 
-        {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
-                message.role === 'user'
-                  ? 'bg-primary text-primary-foreground ml-auto'
-                  : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              {message.role === 'user' ? (
-                <div>
-                  <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
-                  <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
-                </div>
-              ) : (
-                <TabbedResponse key={message.id} message={message} />
-              )}
+        {messages.map((message, index) => {
+          return (
+            <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={`max-w-sm md:max-w-lg lg:max-w-xl xl:max-w-2xl px-4 py-2 rounded-lg ${
+                  message.role === 'user'
+                    ? 'bg-primary text-primary-foreground ml-auto'
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {message.role === 'user' ? (
+                  <div>
+                    <p className='whitespace-pre-wrap break-words text-sm'>{message.content}</p>
+                    <p className='text-xs opacity-70 mt-1'>{message.timestamp.toLocaleTimeString()}</p>
+                  </div>
+                ) : (
+                  <TabbedResponse key={message.id} message={message} />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         <div ref={messagesEndRef} />
       </div>
@@ -383,18 +362,6 @@ export default function Home() {
                 <ToolsButton tools={tools} loading={toolsLoading} error={toolsError} />
               </div>
               <div className='flex items-center space-x-2'>
-                {messages.length > 0 && (
-                  <button
-                    type='button'
-                    onClick={clearChat}
-                    disabled={isLoading}
-                    className='flex items-center space-x-1 text-muted-foreground hover:text-foreground transition-colors'
-                    title='Start a new chat'
-                  >
-                    <Trash2 size={14} />
-                    <span className='text-xs'>Clear Chat</span>
-                  </button>
-                )}
                 <button
                   type='submit'
                   disabled={!inputValue.trim() || isLoading}

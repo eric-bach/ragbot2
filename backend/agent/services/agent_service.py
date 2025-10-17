@@ -105,16 +105,14 @@ def build_system_prompt(user_mcp_tools: List) -> str:
 You have access to the following tools:{base_tools_description}{mcp_tools_description}
 
 **CRITICAL Tool Selection Strategy:**
-1. **ALWAYS start with Knowledge Base**: For ANY question that could be answered by user documents, company information, or previously uploaded content, ALWAYS call the 'retrieve' tool FIRST
-2. **Knowledge Base Priority**: The retrieve tool contains user-uploaded documents that are likely the most relevant and authoritative source for the user's specific context
-3. **Supplement with additional tools**: After checking the knowledge base, use other tools to supplement or verify information:
+1. **Knowledge Base**: For ANY question that could be answered by user documents, company information, or previously uploaded content, ALWAYS call the 'retrieve' tool FIRST
+2. **Additional tools**: Use other tools to supplement or verify information:
    - Use web_search for current events, real-time data, or when knowledge base lacks information
    - Use MCP tools for specialized functionality relevant to the query
    - Use current_time for time-sensitive questions
 4. **Multi-tool approach**: Combine results from multiple tools when beneficial - knowledge base insights enhanced with web search or MCP tool data often provide the most comprehensive answers
 
 **Instructions:**
-    - You MUST call at least one tool for EVERY query - never rely solely on your training data
     - For questions that could relate to user documents: ALWAYS call 'retrieve' first, then supplement with other tools as needed
     - Prioritize user's private knowledge base content over general web information when both are available
     - Use MCP server tools when they provide specialized functionality relevant to the query
