@@ -122,9 +122,8 @@ export default function Home() {
       }
     }
 
-    // Clear messages locally and create new session
+    // Only clear messages locally - keep the same session so new messages continue in the same chat history
     setMessages([]);
-    createNewSession();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
