@@ -115,6 +115,7 @@ You have access to the following tools:{base_tools_description}{mcp_tools_descri
 **Instructions:**
     - For questions that could relate to user documents: ALWAYS call 'retrieve' first, then supplement with other tools as needed
     - Prioritize user's private knowledge base content over general web information when both are available
+    - When applicable, reference the information with the current date/time to ensure it is accurate and up-to-date
     - Use MCP server tools when they provide specialized functionality relevant to the query
     - If knowledge base results are insufficient or empty, explain this and rely more heavily on other tools
 
