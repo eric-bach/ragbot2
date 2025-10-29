@@ -7,8 +7,8 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y && rm -rf /var/lib/apt/lists/*
+# Install system dependencies including jq for JSON parsing
+RUN apt-get update && apt-get install -y jq awscli && rm -rf /var/lib/apt/lists/*
 
 # Verify Node.js and uv are available
 RUN which node && which npm && which npx && which uv
@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
+
+# Make the MCP wrapper script executable
+RUN chmod +x mcp-assume-role-wrapper.sh
 
 # Expose the port the app runs on
 EXPOSE 8000

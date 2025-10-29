@@ -350,11 +350,17 @@ class MCPClientManager:
 
         # Start all clients with timeout
         active_clients = []
+        # Track mapping between active clients and their configs
+        active_client_configs = []
 
+        # First, get the enabled configs that correspond to the created clients
+        enabled_configs = [config for config in user_configs if config.enabled]
+        
         for i, client in enumerate(clients):
             try:
-                server_name = user_configs[i].name if i < len(user_configs) else f"Client {i+1}"
-                config = user_configs[i] if i < len(user_configs) else None
+                # Get the config for this client from the enabled configs
+                config = enabled_configs[i] if i < len(enabled_configs) else None
+                server_name = config.name if config else f"Client {i+1}"
                 
                 logger.info(f"Starting MCP client {i+1}/{len(clients)}: {server_name}")
                 if config:
@@ -369,19 +375,21 @@ class MCPClientManager:
                     timeout=10.0  # 10 second timeout
                 )
                 active_clients.append(client)
+                active_client_configs.append(config)
 
                 logger.info(f"🛠️ Successfully started MCP client {i+1}: {server_name}")
             except asyncio.TimeoutError:
                 error_msg = f"Timeout starting MCP client {i+1} after 10 seconds"
                 logger.error(f"❌ {error_msg}")
+                config = enabled_configs[i] if i < len(enabled_configs) else None
                 mcp_errors.append({
-                    "server_name": user_configs[i].name if i < len(user_configs) else f"Client {i+1}",
+                    "server_name": config.name if config else f"Client {i+1}",
                     "error": "Connection timeout (10 seconds)",
                     "type": "timeout"
                 })
             except Exception as e:
-                server_name = user_configs[i].name if i < len(user_configs) else f"Client {i+1}"
-                config = user_configs[i] if i < len(user_configs) else None
+                config = enabled_configs[i] if i < len(enabled_configs) else None
+                server_name = config.name if config else f"Client {i+1}"
                 
                 error_msg = f"Failed to start MCP client {i+1} ({server_name}): {str(e)}"
                 logger.error(f"❌ {error_msg}")
@@ -409,10 +417,9 @@ class MCPClientManager:
                         timeout=5.0  # 5 second timeout for tool listing
                     )
 
-                    # Get the server name for this client
-                    server_name = "MCP Server"
-                    if i < len(user_configs):
-                        server_name = user_configs[i].name
+                    # Get the server name for this client using the correct mapping
+                    config = active_client_configs[i] if i < len(active_client_configs) else None
+                    server_name = config.name if config else "MCP Server"
 
                     # Debug: Log retrieved tool details and set source
                     for tool in tools:
@@ -435,32 +442,30 @@ class MCPClientManager:
                                     logger.info(f"Found tool description: {tool.description}")
                         # Set the source to the server name
                         tool.source = server_name
-                        logger.info(f"Found {len(tools)} tools from MCP client {server_name}")
 
-
+                    # Log once per server, not per tool
+                    logger.info(f"Found {len(tools)} tools from MCP client {server_name}")
                     all_tools.extend(tools)
                 except asyncio.TimeoutError:
                     error_msg = f"Timeout getting tools from MCP client after 5 seconds"
                     logger.error(error_msg)
-                    # Find the corresponding config for this client
-                    client_index = active_clients.index(client)
-                    if client_index < len(user_configs):
-                        mcp_errors.append({
-                            "server_name": user_configs[client_index].name,
-                            "error": "Timeout retrieving tools (5 seconds)",
-                            "type": "tools_timeout"
-                        })
+                    # Get the correct config for this client using the index
+                    config = active_client_configs[i] if i < len(active_client_configs) else None
+                    mcp_errors.append({
+                        "server_name": config.name if config else f"Client {i+1}",
+                        "error": "Timeout retrieving tools (5 seconds)",
+                        "type": "tools_timeout"
+                    })
                 except Exception as e:
                     error_msg = f"🛑 Failed to get tools from MCP client: {str(e)}"
                     logger.error(error_msg)
-                    # Find the corresponding config for this client
-                    client_index = active_clients.index(client)
-                    if client_index < len(user_configs):
-                        mcp_errors.append({
-                            "server_name": user_configs[client_index].name,
-                            "error": str(e),
-                            "type": "tools_error"
-                        })
+                    # Get the correct config for this client using the index
+                    config = active_client_configs[i] if i < len(active_client_configs) else None
+                    mcp_errors.append({
+                        "server_name": config.name if config else f"Client {i+1}",
+                        "error": str(e),
+                        "type": "tools_error"
+                    })
 
             yield all_tools, active_clients, mcp_errors
 
