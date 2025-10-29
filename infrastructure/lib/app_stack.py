@@ -165,6 +165,14 @@ class AppStack(Stack):
             self, 
             "ECSTaskRole",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+            managed_policies=[
+                # AWS Cost and Compute Optimization policies
+                iam.ManagedPolicy.from_aws_managed_policy_name("ComputeOptimizerReadOnlyAccess"),
+                # AWS service read-only access for Compute Optimizer analysis
+                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonEC2ReadOnlyAccess"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("AWSLambda_ReadOnlyAccess"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonRDSReadOnlyAccess"),
+            ],
         )
 
         # Add permissions for the task to invoke Bedrock APIs
@@ -215,34 +223,50 @@ class AppStack(Stack):
                 actions=[
                     "sts:GetCallerIdentity",  # For credential validation
                     "sts:AssumeRole",        # For cross-account access if needed
+                    "sts:AssumeRoleWithWebIdentity",  # For federated access
+                    "sts:TagSession",        # For session tagging
                 ],
-                resources=["*"],
+                resources=[
+                    "*"  # Allow assuming any role - restrict this to specific ARNs in production
+                    # Example: "arn:aws:iam::TARGET-ACCOUNT-ID:role/MCPBillingRole"
+                ],
             )
         )
 
-        # Add additional AWS service permissions that MCP servers might need
-        # Adjust these based on which AWS MCP servers you plan to use
+        # Add additional AWS service permissions for AWS MCP servers
+        # Only including permissions NOT covered by the managed policies above
         task_role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
-                    # Common AWS service permissions for MCP servers
-                    "ec2:DescribeInstances",
-                    "ec2:DescribeImages", 
-                    "ec2:DescribeSnapshots",
-                    "rds:DescribeDBInstances",
-                    "rds:DescribeDBClusters",
-                    "lambda:ListFunctions",
-                    "lambda:GetFunction",
+                    # CloudFormation permissions (not covered by managed policies)
                     "cloudformation:DescribeStacks",
                     "cloudformation:ListStacks",
-                    # Add more as needed based on your MCP servers
+                    "ecs:*",
+                    # Billing and Cost Management permissions for AWS MCP server
                     "cost-optimization-hub:*",
                     "ce:GetCostAndUsage",
+                    "ce:GetUsageReport",
+                    "ce:GetBillingReport",
                     "ce:GetSavingsPlansCoverage",
                     "ce:GetAnomalies",
-                    "compute-optimizer:GetEC2InstanceRecommendations",
+                    "ce:GetCostCategories",
+                    "ce:GetUsageCategories",
+                    "ce:GetReservationCoverage",
+                    "ce:GetReservationPurchaseRecommendation",
+                    "ce:GetReservationUtilization",
+                    "ce:GetSavingsPlansUtilization",
+                    "ce:GetSavingsPlansUtilizationDetails",
+                    "ce:ListCostCategoryDefinitions",
+                    # AWS Free Tier and Budgets
                     "freetier:GetFreeTierUsage",
                     "budgets:ViewBudget",
+                    "budgets:DescribeBudgets",
+                    # AWS Pricing API
+                    "pricing:GetProducts",
+                    "pricing:GetAttributeValues",
+                    # AWS Support (Trusted Advisor)
+                    "support:DescribeTrustedAdvisorChecks",
+                    "support:DescribeTrustedAdvisorCheckResult",
                 ],
                 resources=["*"],
             )

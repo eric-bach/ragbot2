@@ -7,6 +7,7 @@ interface SessionActionsContextType {
   addSessionToList: (session: Session) => void;
   updateSessionMessageCount: (sessionId: string, messageCount: number) => void;
   createSession: (title?: string) => Promise<Session | null>;
+  refreshSession: (sessionId: string) => Promise<void>;
 }
 
 const SessionActionsContext = createContext<SessionActionsContextType | undefined>(undefined);
@@ -24,6 +25,7 @@ interface SessionActionsProviderProps {
   addSessionToList: (session: Session) => void;
   updateSessionMessageCount: (sessionId: string, messageCount: number) => void;
   createSession: (title?: string) => Promise<Session | null>;
+  refreshSession: (sessionId: string) => Promise<void>;
 }
 
 export function SessionActionsProvider({
@@ -31,9 +33,12 @@ export function SessionActionsProvider({
   addSessionToList,
   updateSessionMessageCount,
   createSession,
+  refreshSession,
 }: SessionActionsProviderProps) {
   return (
-    <SessionActionsContext.Provider value={{ addSessionToList, updateSessionMessageCount, createSession }}>
+    <SessionActionsContext.Provider
+      value={{ addSessionToList, updateSessionMessageCount, createSession, refreshSession }}
+    >
       {children}
     </SessionActionsContext.Provider>
   );

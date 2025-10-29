@@ -68,6 +68,30 @@ function ChatLayoutContent({ children, signOut, user }: ChatLayoutProps) {
     }
   };
 
+  const refreshSession = async (sessionId: string) => {
+    try {
+      // Fetch updated session metadata from backend
+      const response = await fetch(`/api/sessions/${user?.userId}/${sessionId}`);
+      if (response.ok) {
+        const sessionData = await response.json();
+
+        // Update the session in the local state with new title and metadata
+        addSessionToList({
+          session_id: sessionData.session_id,
+          user_id: sessionData.user_id,
+          title: sessionData.title,
+          created_at: sessionData.created_at,
+          updated_at: sessionData.updated_at,
+          message_count: sessionData.conversation?.length || 0,
+        });
+
+        console.log('Refreshed session:', sessionData.title);
+      }
+    } catch (error) {
+      console.error('Failed to refresh session:', error);
+    }
+  };
+
   return (
     <div className='h-screen flex flex-col'>
       {/* Navbar */}
@@ -119,6 +143,7 @@ function ChatLayoutContent({ children, signOut, user }: ChatLayoutProps) {
             addSessionToList={addSessionToList}
             updateSessionMessageCount={updateSessionMessageCount}
             createSession={createSession}
+            refreshSession={refreshSession}
           >
             {children}
           </SessionActionsProvider>

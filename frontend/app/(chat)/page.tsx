@@ -25,9 +25,10 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { currentSessionId, ensureSession, createNewSession, loadSession } = useSessionContext();
   const { tools, loading: toolsLoading, error: toolsError } = useTools(userId);
-  const { addSessionToList, updateSessionMessageCount, createSession } = useSessionActions();
+  const { addSessionToList, updateSessionMessageCount, createSession, refreshSession } = useSessionActions();
 
   // Get user ID only - don't create session yet
   useEffect(() => {
@@ -99,8 +100,32 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
+  // Auto-resize textarea when inputValue changes
+  useEffect(() => {
+    autoResizeTextarea();
+  }, [inputValue]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const autoResizeTextarea = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      // Reset height to auto to get the correct scrollHeight
+      textarea.style.height = 'auto';
+      // Set the height to match the content, with a max height limit
+      const maxHeight = 200; // Maximum height in pixels (about 8-10 lines)
+      const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+      textarea.style.height = `${newHeight}px`;
+
+      // Enable scrolling when content exceeds max height
+      if (textarea.scrollHeight > maxHeight) {
+        textarea.style.overflowY = 'auto';
+      } else {
+        textarea.style.overflowY = 'hidden';
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -154,6 +179,12 @@ export default function Home() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
+    // Reset textarea height after clearing input
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    }, 0);
     setIsLoading(true);
 
     // Create assistant message immediately with thinking content to show loading state
@@ -274,6 +305,15 @@ export default function Home() {
       );
     } finally {
       setIsLoading(false);
+
+      // After chat completion, refresh session to get any title updates from backend
+      if (sessionId) {
+        try {
+          await refreshSession(sessionId);
+        } catch (error) {
+          console.log('Could not refresh session after chat:', error);
+        }
+      }
     }
   };
 
@@ -345,13 +385,40 @@ export default function Home() {
           <div className='border border-input rounded-lg bg-background'>
             {/* Text Input Row */}
             <div className='relative'>
-              <input
-                type='text'
+              <textarea
+                ref={textareaRef}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  // Auto-resize after state update
+                  setTimeout(autoResizeTextarea, 0);
+                }}
                 placeholder='Type your message...'
                 disabled={isLoading}
-                className='w-full px-4 py-3 border-0 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed'
+                rows={2}
+                className='w-full px-4 py-3 border-0 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed resize-none'
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.ctrlKey) {
+                    // Insert newline at cursor position
+                    const target = e.target as HTMLTextAreaElement;
+                    const start = target.selectionStart;
+                    const end = target.selectionEnd;
+                    setInputValue(inputValue.slice(0, start) + '\n' + inputValue.slice(end));
+                    // Move cursor after newline and auto-resize
+                    setTimeout(() => {
+                      target.selectionStart = target.selectionEnd = start + 1;
+                      autoResizeTextarea();
+                    }, 0);
+                    e.preventDefault();
+                  } else if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                    // Submit on Enter (unless Shift or Ctrl is held)
+                    e.preventDefault();
+                    if (inputValue.trim() && !isLoading) {
+                      (e.target as HTMLTextAreaElement).blur();
+                      (e.target as HTMLTextAreaElement).form?.requestSubmit();
+                    }
+                  }
+                }}
               />
             </div>
 
