@@ -222,13 +222,14 @@ class AppStack(Stack):
             iam.PolicyStatement(
                 actions=[
                     "sts:GetCallerIdentity",  # For credential validation
-                    "sts:AssumeRole",        # For cross-account access if needed
+                    "sts:AssumeRole",        # For cross-account access (use external-id: mcp-billing-access)
                     "sts:AssumeRoleWithWebIdentity",  # For federated access
                     "sts:TagSession",        # For session tagging
                 ],
                 resources=[
                     "*"  # Allow assuming any role - restrict this to specific ARNs in production
-                    # Example: "arn:aws:iam::TARGET-ACCOUNT-ID:role/MCPBillingRole"
+                    # Cross-account billing roles: "arn:aws:iam::TARGET-ACCOUNT-ID:role/MCPBillingRole-TARGET-ACCOUNT-ID"
+                    # Remember to use external ID "mcp-billing-access" when assuming roles
                 ],
             )
         )

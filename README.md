@@ -121,6 +121,42 @@ The CDK infrastructure will create 2 stacks
 
 4. The frontend is deployed with Vercel (AWS Amplify does not support streaming responses)
 
+#### Cross-Account Billing and Cost Analysis Setup
+
+RAGBot2 includes an AWS MCP server that can query billing, cost data, and resource information. To enable cross-account access (querying billing data from multiple AWS accounts), you need to set up IAM roles in each target account using the provided CloudFormation template.
+
+### Deployment Steps
+
+1. **Log into the target AWS account's console**
+2. **Navigate to CloudFormation** → Create Stack → With new resources
+3. **Upload template**: Select `infrastructure/cross-account-billing-role.yaml`
+4. **Configure parameters**:
+   - **Stack name**: `mcp-billing-role` (or your preferred name)
+   - **TrustedAccountId**: `761018860881` (replace with your main account ID)
+   - **ECSTaskRoleNamePrefix**: `ragbot2-app-ECSTaskRole` (leave as default)
+5. **Acknowledge IAM resource creation** (required checkbox)
+6. **Deploy the stack**
+
+Repeat these steps for each AWS account you want to query billing data from.
+
+### What Gets Created
+
+The CloudFormation template creates:
+
+- **IAM Role**: `MCPBillingRole-{AccountId}` with cross-account trust relationship
+- **Managed Policies**:
+  - AmazonEC2ReadOnlyAccess
+  - AmazonRDSReadOnlyAccess
+  - AWSLambda_ReadOnlyAccess
+  - ComputeOptimizerReadOnlyAccess
+- **Inline Policy**: Additional permissions for:
+  - Cost Explorer (ce:\*) - billing and cost data
+  - Cost Optimization Hub - cost optimization recommendations
+  - Budgets - budget viewing
+  - Pricing API - AWS service pricing
+  - Trusted Advisor - optimization checks
+  - CloudFormation - stack information
+
 #### Running the agent locally
 
 1. Create a `.env` file in the `/backend/agent` folder

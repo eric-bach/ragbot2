@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Role for cross-account AWS MCP server billing and cost access'
+
+Parameters:
+  TrustedAccountId:
+    Type: String
+    Default: '761018860881'
+    Description: 'Account ID that contains the ECS task role that will assume this role'
+
+  ECSTaskRoleNamePrefix:
+    Type: String
+    Default: 'ragbot2-app-ECSTaskRole'
+    Description: 'Prefix of the ECS task role name (without the CDK-generated suffix)'
+
+Resources:
+  MCPCrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'RagBot2MCPCrossAccountRole-${AWS::AccountId}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${TrustedAccountId}:role/${ECSTaskRoleNamePrefix}*'
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'sts:ExternalId': 'mcp-billing-access'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess
+        - arn:aws:iam::aws:policy/AWSLambda_ReadOnlyAccess
+        - arn:aws:iam::aws:policy/ComputeOptimizerReadOnlyAccess
+      Policies:
+        - PolicyName: BillingAndCostAnalysisPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - compute-optimizer:*
+                  - ce:*
+                  - cost-optimization-hub:*
+                  - freetier:GetFreeTierUsage
+                  - budgets:ViewBudget
+                  - budgets:DescribeBudgets
+                  - pricing:GetProducts
+                  - pricing:GetAttributeValues
+                  - support:DescribeTrustedAdvisorChecks
+                  - support:DescribeTrustedAdvisorCheckResult
+                  - cloudformation:DescribeStacks
+                  - cloudformation:ListStacks
+                  - sts:GetCallerIdentity
+                Resource: '*'
+      Tags:
+        - Key: Purpose
+          Value: 'MCP Billing Cross-Account Access'
+        - Key: CreatedBy
+          Value: 'RagBot2 Infrastructure'
+
+Outputs:
+  RoleArn:
+    Description: 'ARN of the created MCP Cross Account Role'
+    Value: !GetAtt MCPCrossAccountRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-MCPCrossAccountRole-Arn'
+
+  RoleName:
+    Description: 'Name of the created MCP Cross Account Role'
+    Value: !Ref MCPCrossAccountRole
+    Export:
+      Name: !Sub '${AWS::StackName}-MCPCrossAccountRole-Name'
+
+  AssumeRoleCommand:
+    Description: 'AWS CLI command to test role assumption'
+    Value: !Sub 'aws sts assume-role --role-arn ${MCPCrossAccountRole.Arn} --role-session-name mcp-test --external-id mcp-billing-access'
