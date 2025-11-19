@@ -16,7 +16,7 @@ Resources:
   MCPCrossAccountRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'RagBot2MCPCrossAccountRole-${AWS::AccountId}'
+      RoleName: RAGBot2MCPCrossAccountRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

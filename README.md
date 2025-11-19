@@ -125,7 +125,7 @@ The CDK infrastructure will create 2 stacks
 
 RAGBot2 includes an AWS MCP server that can query billing, cost data, and resource information. To enable cross-account access (querying billing data from multiple AWS accounts), you need to set up IAM roles in each target account using the provided CloudFormation template.
 
-### Deployment Steps
+##### Deployment Steps
 
 1. **Log into the target AWS account's console**
 2. **Navigate to CloudFormation** → Create Stack → With new resources
@@ -139,7 +139,7 @@ RAGBot2 includes an AWS MCP server that can query billing, cost data, and resour
 
 Repeat these steps for each AWS account you want to query billing data from.
 
-### What Gets Created
+##### What Gets Created
 
 The CloudFormation template creates:
 
@@ -156,6 +156,17 @@ The CloudFormation template creates:
   - Pricing API - AWS service pricing
   - Trusted Advisor - optimization checks
   - CloudFormation - stack information
+
+##### Adding the MCP server
+
+In the RAGBot2 console, add the MCP server with the role that was created
+
+- **command**: ./mcp-assume-role-wrapper.sh
+- **args**: []
+- **variables**:
+  AWS_ROLE_ARN=arn:aws:iam::{{AWS_ACCOUNT_ID}}:role/RAGBot2MCPCrossAccountRole
+  AWS_ROLE_SESSION_NAME=ragbot-mcp-session
+  AWS_REGION=us-west-2
 
 #### Running the agent locally
 
